@@ -1,4 +1,4 @@
-{-# LANGUAGE RecordWildCards, DeriveFunctor, DeriveFoldable, DeriveTraversable #-}
+{-# LANGUAGE RecordWildCards, DeriveFunctor, DeriveFoldable, DeriveTraversable, DeriveGeneric #-}
 
 import           Control.Applicative
 import qualified Data.ByteString.Lazy as BS
@@ -7,9 +7,11 @@ import           Data.Csv
 import           Data.Foldable as Foldable
 import           Data.Traversable
 import qualified Data.Vector as V
+import GHC.Generics
 import           Numeric.AD
 import           Numeric.AD.Internal.Classes (Lifted)
 import           Numeric.AD.Types (AD)
+import           Linear
 import           Optimization.LineSearch.ConjugateGradient
 
 import           Control.Lens
@@ -18,13 +20,22 @@ import           Data.Colour.Names
 import           Graphics.Rendering.Chart
 import           System.Environment
 
-data FcsModel a = Fcs { fcsTauD     :: !a  -- ^ diffusion time (us)
-                      , fcsA        :: !a  -- ^ aspect ratio
-                      , fcsG0       :: !a  -- ^ amplitude
-                      , fcsGinf     :: !a  -- ^ offset
-                      , fcsAlpha    :: !a  -- ^ anomalous diffusion exponent
+data FcsModel a = Fcs { fcsTauD     :: a  -- ^ diffusion time (us)
+                      , fcsA        :: a  -- ^ aspect ratio
+                      , fcsG0       :: a  -- ^ amplitude
+                      , fcsGinf     :: a  -- ^ offset
+                      , fcsAlpha    :: a  -- ^ anomalous diffusion exponent
                       }
                 deriving (Show, Eq, Functor, Foldable, Traversable)
+
+instance Applicative FcsModel where
+    pure a = Fcs a a a a a
+    Fcs a b c d e <*> Fcs a' b' c' d' e' = Fcs (a a') (b b') (c c') (d d') (e e')
+
+instance Additive FcsModel where
+    zero = pure 0
+
+instance Metric FcsModel
 
 data Scope a = Fixed a
              | Fitted
@@ -38,7 +49,7 @@ withScope s x = f <$> s <*> x
 
 fcsCorr :: (RealFloat a) => FcsModel a -> a -> a
 fcsCorr (Fcs {..}) tau =
-    fcsG0 / (1 + ttd) / sqrt (1 + fcsA**(-2) * ttd) + fcsGinf
+    fcsG0 / (1 + ttd) / sqrt (1 + 1/(fcsA*fcsA) * ttd) + fcsGinf
   where ttd = tau / fcsTauD
 
 sumSqResidual :: (Functor f, Foldable f, RealFrac a) => (a -> a) -> f (Obs a) -> a
@@ -54,18 +65,22 @@ main = do
                  , fcsGinf  = 1
                  , fcsAlpha = 1
                  }
-    let fit :: Lifted s => FcsModel (AD s Double) -> AD s Double
+    let fit :: RealFloat a => FcsModel a -> a
         fit p = sumSqResidual (fcsCorr p) $ fmap (fmap realToFrac) corr
-    print p0
+        dfit :: RealFloat a => FcsModel a -> FcsModel a
+        dfit = grad fit
+
     let go :: (a -> String) -> Int -> [a] -> IO a
         go show 0 (x:_)     = return x
         go show _ [x]       = return x
         go show n (x:rest)  = putStrLn (show x) >> go show (n-1) rest
-    --let p1 = head $ drop 100 $ conjugateGradientDescent fit p0
-    p1 <- go (\p->show (sumSqResidual (fcsCorr (fmap realToFrac p)) corr, p)) 100 $ conjugateGradientDescent fit p0
+
+    let search = backtrackingSearch 0.1 0.2
+        beta = fletcherReeves
+    p1 <- go (\p->show (sumSqResidual (fcsCorr (fmap realToFrac p)) corr, p)) 10000
+             $ conjGrad search beta fit dfit p0
     print p1
-    renderableToSVGFile (toRenderable $ plotFit corr [fcsCorr p1])
-                        800 800 "out.svg"
+    renderableToSVGFile (toRenderable $ plotFit corr [fcsCorr p1]) 800 800 "out.svg"
 
 data Obs a = Obs { oX :: !a   -- ^ Abscissa
                  , oY :: !a   -- ^ Ordinate
