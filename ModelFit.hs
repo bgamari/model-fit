@@ -1,4 +1,7 @@
-{-# LANGUAGE RecordWildCards, DeriveFunctor, DeriveFoldable, DeriveTraversable, DeriveGeneric #-}
+{-# LANGUAGE RecordWildCards, MultiParamTypeClasses,
+    DeriveFunctor, DeriveFoldable, DeriveTraversable, DeriveGeneric,
+    FlexibleInstances, FlexibleContexts,
+    KindSignatures, DataKinds, TypeOperators #-}
 
 import           Control.Applicative
 import qualified Data.ByteString.Lazy as BS
@@ -7,18 +10,23 @@ import           Data.Csv
 import           Data.Foldable as Foldable
 import           Data.Traversable
 import qualified Data.Vector as V
-import GHC.Generics
 import           Numeric.AD
 import           Numeric.AD.Internal.Classes (Lifted)
 import           Numeric.AD.Types (AD)
 import           Linear
+import           Linear.V
+
 import           Optimization.LineSearch.ConjugateGradient
+import Constrained
 
 import           Control.Lens
 import           Data.Colour
 import           Data.Colour.Names
 import           Graphics.Rendering.Chart
 import           System.Environment
+
+class Model f a where
+    model :: f a -> a -> a
 
 -- | Diffusion model
 data FcsModel a = Fcs { fcsTauD     :: a  -- ^ diffusion time (us)
@@ -37,6 +45,9 @@ instance Additive FcsModel where
     zero = pure 0
 
 instance Metric FcsModel
+
+instance RealFloat a => Model FcsModel a where
+    model = fcsCorr
 
 fcsCorr :: (RealFloat a) => FcsModel a -> a -> a
 fcsCorr (Fcs {..}) tau =
@@ -61,6 +72,9 @@ instance Additive FcsTriplet where
 
 instance Metric FcsTriplet
 
+instance RealFloat a => Model FcsTriplet a where
+    model = fcsTripletCorr
+
 fcsTripletCorr :: (RealFloat a) => FcsTriplet a -> a -> a
 fcsTripletCorr (FcsT {..}) tau =
     (1 - fcsF + fcsF * exp (-tau / fcsTauF)) / (1 - fcsF) * fcsCorr fcsFcs tau
@@ -80,16 +94,16 @@ instance (Additive f, Applicative f, Additive g, Applicative g) => Additive (Sum
 instance (Metric f, Foldable f, Applicative f, Metric g, Foldable g, Applicative g) =>
          Metric (SumM f g)
 
-sumM :: (Num a) => (f a -> a) -> (g a -> a) -> SumM f g a -> a
-sumM f g (SumM fa ga) = f fa + g ga
+instance (Model f a, Model g a, Num a) => Model (SumM f g) a where
+    model (SumM fa ga) a = model fa a + model ga a
 
 -- | Product model
 data ProdM f g a = ProdM (f a) (g a)
                 deriving (Show, Eq, Functor, Foldable, Traversable)
 
 instance (Applicative f, Applicative g) => Applicative (ProdM f g) where
-    pure a = SumM (pure a) (pure a)
-    SumM f g <*> SumM f' g' = SumM (f <*> f') (g <*> g')
+    pure a = ProdM (pure a) (pure a)
+    ProdM f g <*> ProdM f' g' = ProdM (f <*> f') (g <*> g')
 
 instance (Additive f, Applicative f, Additive g, Applicative g) => Additive (ProdM f g) where
     zero = pure 0
@@ -97,22 +111,18 @@ instance (Additive f, Applicative f, Additive g, Applicative g) => Additive (Pro
 instance (Metric f, Foldable f, Applicative f, Metric g, Foldable g, Applicative g) =>
          Metric (ProdM f g)
 
-prodM :: (Num a) => (f a -> a) -> (g a -> a) -> ProdM f g a -> a
-prodM f g (SumM fa ga) = f fa * g ga
+instance (Model f a, Model g a, Num a) => Model (ProdM f g) a where
+    model (ProdM fa ga) a = model fa a * model ga a
 
--- | Other
-data Scope a = Fixed a
-             | Fitted
-             deriving (Show)
-
-withScope :: Applicative f => f (Scope a) -> f a -> f a
-withScope s x = f <$> s <*> x
-  where f :: Scope a -> a -> a
-        f (Fixed x) _ = x
-        f Fitted    x = x
 
 sumSqResidual :: (Functor f, Foldable f, RealFrac a) => (a -> a) -> f (Obs a) -> a
 sumSqResidual f = Foldable.sum . fmap (\(Obs x y s)->(f x - y)^2 / s)
+
+data Obs a = Obs { oX :: !a   -- ^ Abscissa
+                 , oY :: !a   -- ^ Ordinate
+                 , oE :: !a   -- ^ Variance
+                 }
+             deriving (Show, Eq, Functor, Foldable, Traversable)
 
 main = do
     fname:_ <- getArgs
@@ -150,12 +160,6 @@ main = do
              $ conjGrad search beta fit dfit t0
     print p1
     renderableToSVGFile (toRenderable $ plotFit corr [fcsTripletCorr p1]) 800 800 "out.svg"
-
-data Obs a = Obs { oX :: !a   -- ^ Abscissa
-                 , oY :: !a   -- ^ Ordinate
-                 , oE :: !a   -- ^ Variance
-                 }
-             deriving (Show, Eq, Functor, Foldable, Traversable)
 
 instance FromField a => FromRecord (Obs a) where
     parseRecord v
