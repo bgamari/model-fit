@@ -54,7 +54,7 @@ constrainGT :: (Num a) => (forall s. Mode s => f (AD s a) -> AD s a)
 constrainGT h (Opt f gs hs) = Opt f gs (augment (FU $ negate . h) hs)
 
 -- | Minimize the given constrained optimization problem
-minimize :: (Functor f, Num a, SingI kG, SingI kH, g ~ V (kG+kH))
+minimize :: (Functor f, Num a, SingI kG, SingI kH, g ~ V kG)
          => (FU f a -> f a -> [f a]) -- ^ Primal minimizer
          -> (FU g a -> g a -> [g a]) -- ^ Dual minimizer
          -> Opt f kG kH a     -- ^ The optimization problem of interest
@@ -67,7 +67,7 @@ minimize minX minL opt x0 l0 = go x0 l0
                    in x1 : go x1 l1
 
 -- | Maximize the given constrained optimization problem
-maximize :: (Functor f, Num a, SingI kG, SingI kH, g ~ V (kG+kH))
+maximize :: (Functor f, Num a, SingI kG, SingI kH, g ~ V kG)
          => (FU f a -> f a -> [f a]) -- ^ Primal minimizer
          -> (FU g a -> g a -> [g a]) -- ^ Dual minimizer
          -> Opt f kG kH a       -- ^ The optimization problem of interest
@@ -78,7 +78,7 @@ maximize minX minL (Opt (FU f) gs hs) =
     minimize minX minL (Opt (FU $ negate . f) gs hs)
 
 -- | The Lagrangian for the given constrained optimization
-lagrangian :: (Num a) => Opt f kG kH a -> (forall s. Mode s => f (AD s a) -> V (kG+kH) (AD s a) -> AD s a)
+lagrangian :: (Num a) => Opt f kG kH a -> (forall s. Mode s => f (AD s a) -> V kG (AD s a) -> AD s a)
 lagrangian (Opt (FU f) gs' hs') x l =
     f x - V.sum (V.zipWith (\lamb (FU g)->lamb * g x) ls gs)
   where ls = toVector l
