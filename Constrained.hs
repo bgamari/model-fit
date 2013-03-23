@@ -55,12 +55,12 @@ constrainGT h (Opt f gs hs) = Opt f gs (augment (FU $ negate . h) hs)
 
 -- | Minimize the given constrained optimization problem
 minimize :: (Functor f, Num a, SingI kG, SingI kH, g ~ V kG)
-         => (FU f a -> f a -> [f a]) -- ^ Primal minimizer
-         -> (FU g a -> g a -> [g a]) -- ^ Dual minimizer
-         -> Opt f kG kH a     -- ^ The optimization problem of interest
-         -> f a                 -- ^ The primal starting value
-         -> g a                 -- ^ The dual starting value
-         -> [f a]               -- ^ Optimizing iterates
+         => (FU f a -> f a -> [f a])   -- ^ Primal minimizer
+         -> (FU g a -> g a -> [g a])   -- ^ Dual minimizer
+         -> Opt f kG kH a              -- ^ The optimization problem of interest
+         -> f a                        -- ^ The primal starting value
+         -> g a                        -- ^ The dual starting value
+         -> [f a]                      -- ^ Optimizing iterates
 minimize minX minL opt x0 l0 = go x0 l0
   where go x0 l0 = let l1 = head $ minL (FU $ \l -> -lagrangian opt (fmap auto x0) l) l0
                        x1 = head $ minX (FU $ \x ->  lagrangian opt x (fmap auto l1)) x0
@@ -68,12 +68,12 @@ minimize minX minL opt x0 l0 = go x0 l0
 
 -- | Maximize the given constrained optimization problem
 maximize :: (Functor f, Num a, SingI kG, SingI kH, g ~ V kG)
-         => (FU f a -> f a -> [f a]) -- ^ Primal minimizer
-         -> (FU g a -> g a -> [g a]) -- ^ Dual minimizer
-         -> Opt f kG kH a       -- ^ The optimization problem of interest
-         -> f a                 -- ^ The primal starting value
-         -> g a                 -- ^ The dual starting value
-         -> [f a]               -- ^ Optimizing iterates
+         => (FU f a -> f a -> [f a])   -- ^ Primal minimizer
+         -> (FU g a -> g a -> [g a])   -- ^ Dual minimizer
+         -> Opt f kG kH a              -- ^ The optimization problem of interest
+         -> f a                        -- ^ The primal starting value
+         -> g a                        -- ^ The dual starting value
+         -> [f a]                      -- ^ Optimizing iterates
 maximize minX minL (Opt (FU f) gs hs) =
     minimize minX minL (Opt (FU $ negate . f) gs hs)
 
