@@ -16,13 +16,12 @@ module Constrained
   , lagrangian
   ) where
 
-import Numeric.AD.Types
-import Numeric.AD.Internal.Classes
+import           Numeric.AD.Types
 
 import           Data.Maybe
 import           Control.Applicative
 import           Linear.V
-import GHC.TypeLits
+import           GHC.TypeLits
 import qualified Data.Vector as V
 import           Data.Traversable
 import           Data.Foldable
@@ -61,7 +60,7 @@ minimize :: (Functor f, Num a, SingI kG, SingI kH, g ~ V kG)
          -> f a                        -- ^ The primal starting value
          -> g a                        -- ^ The dual starting value
          -> [f a]                      -- ^ Optimizing iterates
-minimize minX minL opt x0 l0 = go x0 l0
+minimize minX minL opt = go
   where go x0 l0 = let l1 = head $ minL (FU $ \l -> -lagrangian opt (fmap auto x0) l) l0
                        x1 = head $ minX (FU $ \x ->  lagrangian opt x (fmap auto l1)) x0
                    in x1 : go x1 l1
