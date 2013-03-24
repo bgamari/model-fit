@@ -12,6 +12,7 @@ module Constrained
   , constrainGT
     -- * Optimizing the problem
   , minimize
+  , maximize
     -- * Finding the Lagrangian
   , lagrangian
   , V(..)
@@ -62,8 +63,8 @@ minimize :: (Functor f, Num a, g ~ V)
          -> g a                        -- ^ The dual starting value
          -> [f a]                      -- ^ Optimizing iterates
 minimize minX minL opt = go
-  where go x0 l0 = let l1 = head $ minL (FU $ \l -> -lagrangian opt (fmap auto x0) l) l0
-                       x1 = head $ minX (FU $ \x ->  lagrangian opt x (fmap auto l1)) x0
+  where go x0 l0 = let l1 = head $ drop 100 $ minL (FU $ \l -> -lagrangian opt (fmap auto x0) l) l0
+                       x1 = head $ drop 100 $ minX (FU $ \x ->  lagrangian opt x (fmap auto l1)) x0
                    in x1 : go x1 l1
 
 -- | Maximize the given constrained optimization problem
@@ -80,8 +81,5 @@ maximize minX minL (Opt (FU f) gs hs) =
 -- | The Lagrangian for the given constrained optimization
 lagrangian :: (Num a) => Opt f a
            -> (forall s. Mode s => f (AD s a) -> V (AD s a) -> AD s a)
-lagrangian (Opt (FU f) gs' hs') x l =
-    f x - V.sum (V.zipWith (\lamb (FU g)->lamb * g x) ls gs)
-  where ls = l
-        gs = gs'
-        hs = hs'
+lagrangian (Opt (FU f) gs hs) x l =
+    f x - V.sum (V.zipWith (\lamb (FU g)->lamb * g x) l gs)
