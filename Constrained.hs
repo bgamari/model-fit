@@ -14,13 +14,13 @@ module Constrained
   , minimize
     -- * Finding the Lagrangian
   , lagrangian
+  , V(..)
   ) where
 
 import           Numeric.AD.Types
 
 import           Data.Maybe
 import           Control.Applicative
-import           Linear.V
 import           GHC.TypeLits
 import qualified Data.Vector as V
 import           Data.Traversable
@@ -28,35 +28,36 @@ import           Data.Foldable
 
 newtype FU f a = FU { runFU :: forall s. Mode s => f (AD s a) -> AD s a }
 
+type V = V.Vector
+
 -- | @Opt d f gs hs@ is a Lagrangian optimization problem with objective @f@
 -- equality (@g(x) == 0@) constraints @gs@ and less-than (@h(x) < 0@)
 -- constraints @hs@
-data Opt f (kG::Nat) (kH::Nat) a =
-    Opt (FU f a) (V kG (FU f a)) (V kH (FU f a))
+data Opt f a = Opt (FU f a) (V (FU f a)) (V (FU f a))
 
-optimize :: (forall s. Mode s => f (AD s a) -> AD s a) -> Opt f 0 0 a
-optimize f = Opt (FU f) (pure $ FU undefined) (pure $ FU undefined)
+optimize :: (forall s. Mode s => f (AD s a) -> AD s a) -> Opt f a
+optimize f = Opt (FU f) V.empty V.empty
 
---augment :: SingI (k+1) => a -> V k a -> V (k+1) a
---augment a = fromJust . fromVector . V.cons a . toVector
+augment :: a -> V a -> V a
+augment a xs = V.cons a xs
 
 constrainEQ :: (forall s. Mode s => f (AD s a) -> AD s a)
-            -> Opt f kG kH a -> Opt f (kG+1) kH a
+            -> Opt f a -> Opt f a
 constrainEQ g (Opt f gs hs) = Opt f (augment (FU g) gs) hs
 
 constrainLT :: (forall s. Mode s => f (AD s a) -> AD s a)
-            -> Opt f kG kH a -> Opt f kG (kH+1) a
+            -> Opt f a -> Opt f a
 constrainLT h (Opt f gs hs) = Opt f gs (augment (FU h) hs)
 
 constrainGT :: (Num a) => (forall s. Mode s => f (AD s a) -> AD s a)
-            -> Opt f kG kH a -> Opt f kG (kH+1) a
+            -> Opt f a -> Opt f a
 constrainGT h (Opt f gs hs) = Opt f gs (augment (FU $ negate . h) hs)
 
 -- | Minimize the given constrained optimization problem
-minimize :: (Functor f, Num a, SingI kG, SingI kH, g ~ V kG)
+minimize :: (Functor f, Num a, g ~ V)
          => (FU f a -> f a -> [f a])   -- ^ Primal minimizer
          -> (FU g a -> g a -> [g a])   -- ^ Dual minimizer
-         -> Opt f kG kH a              -- ^ The optimization problem of interest
+         -> Opt f a                    -- ^ The optimization problem of interest
          -> f a                        -- ^ The primal starting value
          -> g a                        -- ^ The dual starting value
          -> [f a]                      -- ^ Optimizing iterates
@@ -66,10 +67,10 @@ minimize minX minL opt = go
                    in x1 : go x1 l1
 
 -- | Maximize the given constrained optimization problem
-maximize :: (Functor f, Num a, SingI kG, SingI kH, g ~ V kG)
+maximize :: (Functor f, Num a, g ~ V)
          => (FU f a -> f a -> [f a])   -- ^ Primal minimizer
          -> (FU g a -> g a -> [g a])   -- ^ Dual minimizer
-         -> Opt f kG kH a              -- ^ The optimization problem of interest
+         -> Opt f a                    -- ^ The optimization problem of interest
          -> f a                        -- ^ The primal starting value
          -> g a                        -- ^ The dual starting value
          -> [f a]                      -- ^ Optimizing iterates
@@ -77,9 +78,10 @@ maximize minX minL (Opt (FU f) gs hs) =
     minimize minX minL (Opt (FU $ negate . f) gs hs)
 
 -- | The Lagrangian for the given constrained optimization
-lagrangian :: (Num a) => Opt f kG kH a -> (forall s. Mode s => f (AD s a) -> V kG (AD s a) -> AD s a)
+lagrangian :: (Num a) => Opt f a
+           -> (forall s. Mode s => f (AD s a) -> V (AD s a) -> AD s a)
 lagrangian (Opt (FU f) gs' hs') x l =
     f x - V.sum (V.zipWith (\lamb (FU g)->lamb * g x) ls gs)
-  where ls = toVector l
-        gs = toVector gs'
-        hs = toVector hs'
+  where ls = l
+        gs = gs'
+        hs = hs'
