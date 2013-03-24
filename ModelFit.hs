@@ -10,14 +10,14 @@ import           Data.Csv
 import           Data.Foldable as Foldable
 import           Data.Traversable
 import qualified Data.Vector as V
+
 import           Numeric.AD
 import           Numeric.AD.Internal.Classes (Lifted)
 import           Numeric.AD.Types
 import           Linear
 import           Linear.V
-
 import           Optimization.LineSearch.ConjugateGradient
-import Constrained
+import           Optimization.Constrained.Penalty
 
 import           Control.Lens
 import           Data.Colour
@@ -148,8 +148,7 @@ main = do
     --    dfit = grad fit
     let fit :: RealFloat a => FcsTriplet a -> a
         fit p = sumSqResidual (fcsTripletCorr p) $ fmap (fmap realToFrac) corr
-        opt = constrainEQ (\fcs -> fcsTauF fcs - 0.2)
-              $ optimize fit
+        opt = optimize fit
 
     let go :: (a -> String) -> Int -> [a] -> IO a
         go show 0 (x:_)     = return x
@@ -162,6 +161,7 @@ main = do
         beta = fletcherReeves
         xmin (FU f) = conjGrad search beta (lowerFU f) (grad f)
     p1 <- go (\p->show (sumSqResidual (fcsTripletCorr (fmap realToFrac p)) corr, p)) 1000
+             $ takeUntilConverged (absDeltaConv fit 0.1)
              $ minimize xmin opt 2 t0 l0
     print p1
     renderableToSVGFile (toRenderable $ plotFit corr [fcsTripletCorr p1]) 800 800 "out.svg"
@@ -172,14 +172,19 @@ instance FromField a => FromRecord (Obs a) where
                                  <*> v .! 1
                                  <*> v .! 2
 
+-- | Take iterates until the given function of the last pair of iterates
+-- returns @True@
 takeUntilConverged :: (a -> a -> Bool) -> [a] -> [a]
 takeUntilConverged f xs = go xs
   where go (x:[]) = [x]
         go (x:y:xs) | f y x      = x:y:[]
                     | otherwise  = x:go (y:xs)
 
-relErrorConverged :: (RealFrac r) => (a -> r) -> r -> a -> a -> Bool
-relErrorConverged f err a b = let rel = (f a - f b) / f a in rel < err
+absDeltaConv :: (RealFrac r) => (a -> r) -> r -> a -> a -> Bool
+absDeltaConv f tol a b = abs (f a - f b) < tol
+
+relDeltaConv :: (RealFrac r) => (a -> r) -> r -> a -> a -> Bool
+relDeltaConv f tol a b = abs (f a - f b) / f a < tol
 
 readCorr :: FilePath -> IO (Either String (V.Vector (Obs Double)))
 readCorr fname =

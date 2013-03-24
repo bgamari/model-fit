@@ -1,6 +1,5 @@
 {-# LANGUAGE DataKinds, RankNTypes, FlexibleContexts #-}
 
-import Constrained
 import Control.Applicative
 import Data.Traversable
 import GHC.TypeLits
@@ -9,6 +8,7 @@ import Numeric.AD
 import Numeric.AD.Types
 import Optimization.LineSearch.ConjugateGradient
 import Optimization.LineSearch.SteepestDescent
+import Optimization.Constrained.Penalty
 import qualified Data.Vector as V
 
 instance Metric V.Vector
