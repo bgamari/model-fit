@@ -17,5 +17,4 @@ cabal-version:       >=1.8
 
 executable model-fit
   main-is:             ModelFit.hs
-  other-modules:       Constrained
   build-depends:       base ==4.6.*, ad ==3.4.*, linear ==1.1.*, vector ==0.10.*, bytestring ==0.10.*, cassava ==0.2.*, optimization ==0.1.*, lens ==3.9.*, colour ==2.3.*, Chart ==1.0.*
