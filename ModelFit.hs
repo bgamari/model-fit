@@ -1,6 +1,6 @@
 {-# LANGUAGE RecordWildCards, MultiParamTypeClasses,
     DeriveFunctor, DeriveFoldable, DeriveTraversable, DeriveGeneric,
-    FlexibleInstances, FlexibleContexts,
+    FlexibleInstances, FlexibleContexts, RankNTypes,
     KindSignatures, DataKinds, TypeOperators #-}
 
 import           Control.Applicative
@@ -34,13 +34,9 @@ data Obs a = Obs { oX :: !a   -- ^ Abscissa
                  }
              deriving (Show, Eq, Functor, Foldable, Traversable)
 
-main = do
-    fname:_ <- getArgs
-    Right corr' <- readCorr fname
-    let corr = V.map (\o->o {oX=1e6*oX o})
-               -- $ V.filter (\o->oX o > 1e-6)
-               corr'
-    let p0 = Fcs { fcsTauD  = 100
+fitModel :: RealFrac a => SumM FcsTriplet FcsModel a
+fitModel = SumM t0 p1
+  where p0 = Fcs { fcsTauD  = 100
                  , fcsA     = 10
                  , fcsG0    = 10
                  , fcsGinf  = 1
@@ -50,10 +46,27 @@ main = do
                   , fcsTauF = 0.1
                   , fcsFcs = p0
                   }
+        p1 = Fcs { fcsTauD  = 200
+                 , fcsA     = 10
+                 , fcsG0    = 10
+                 , fcsGinf  = 1
+                 , fcsAlpha = 1
+                 }
 
-    let fit :: RealFloat a => FcsTriplet a -> a
-        fit p = sumSqResidual (model p) $ fmap (fmap realToFrac) corr
-        opt = optimize fit
+
+opt :: (Mode s, Model f (AD s a)) => V.Vector (Obs a) -> Opt f a
+opt obs = optimize (fit obs)
+
+fit :: (Mode s, Model f (AD s a), RealFrac a)
+    => V.Vector (Obs a) -> f (AD s a) -> AD s a
+fit obs p = sumSqResidual (model p) $ fmap (fmap realToFrac) obs
+
+main = do
+    fname:_ <- getArgs
+    Right corr' <- readCorr fname
+    let corr = V.map (\o->o {oX=1e6*oX o})
+               -- $ V.filter (\o->oX o > 1e-6)
+               corr'
 
     let go :: (a -> String) -> Int -> [a] -> IO a
         go show 0 (x:_)     = return x
@@ -65,11 +78,12 @@ main = do
     let search = backtrackingSearch 0.1 0.2
         beta = fletcherReeves
         xmin (FU f) = conjGrad search beta (lowerFU f) (grad f)
-    p1 <- go (\p->show (sumSqResidual (fcsTripletCorr (fmap realToFrac p)) corr, p)) 1000
-             $ takeUntilConverged (absDeltaConv fit 0.1)
-             $ minimize xmin opt 2 t0 l0
+        opt' = opt corr :: Opt (SumM FcsTriplet FcsModel) Double
+    p1 <- go (\p->show (fit corr p, p)) 1000
+             $ takeUntilConverged (absDeltaConv (fit corr) 0.1)
+             $ minimize xmin opt' 2 fitModel l0
     print p1
-    renderableToSVGFile (toRenderable $ plotFit corr [fcsTripletCorr p1]) 800 800 "out.svg"
+    --renderableToSVGFile (toRenderable $ plotFit corr [model p1]) 800 800 "out.svg"
 
 instance FromField a => FromRecord (Obs a) where
     parseRecord v
