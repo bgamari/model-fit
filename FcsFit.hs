@@ -35,22 +35,23 @@ fit m curves sources p0 =
   where
     search = armijoSearch 0.1 1 1e-4 f
     df :: PackedParams curves param a -> PackedParams curves param a
-    df = finiteDiff (pure 1e-3) f 
+    df = finiteDiff (pure 1e-4) f 
     f :: PackedParams curves param a -> a
     f packed = let p = unpack sources packed
-               in chiSquared m ((,) <$> p <*> curves)
+               in chiSquared m p curves
   
 finiteDiff :: (Traversable f, Applicative f, Additive f, Num a)
            => f a -> (f a -> a) -> f a -> f a
 finiteDiff h f x = fmap (\h'->f (x ^+^ h')) (kronecker h)
 
 main = do
-    let genParams = defaultParams & diffTime %~ (+10)
+    let genParams = defaultParams & (diffTime      .~ 10)
+                                  . (concentration .~ 2)
         params = genParams
         m = diff3DModel
         points = V.fromList [ Point (V1 x) (model m genParams $ V1 x) (V1 1)
-                            | x <- [1e-6, 2e-6..100e-6] ]
+                            | x <- [1, 2..100] ]
         sources = fmap (FromVector . PIdx) $ Diff3DP 0 1 2 3
-        packedParams = V.fromList [1,1,1,1]
-    F.mapM_ (print . runIdentity)
+        packedParams = V.fromList [10,1,3,1]
+    F.mapM_ (print . runIdentity) $ take 200
       $ fit m (Identity points) (Identity sources) (PP packedParams)

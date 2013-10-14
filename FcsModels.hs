@@ -33,8 +33,8 @@ diff3DModel :: RealFloat a => Model Diff3DParams V1 V1 a
 diff3DModel = Model $ \(Diff3DP taud a alpha n) (V1 tau) ->
     let b = 1 + tau_taud
         c = 1 + tau_taud / a^2
-        tau_taud = (tau / (taud*1e-6))**alpha
-    in V1 $ 1 / b / c / n
+        tau_taud = (tau / (taud))**alpha
+    in V1 $ 1 / b / sqrt c / n
 
 defaultParams :: Diff3DParams Double
 defaultParams = Diff3DP 100 1 3 1

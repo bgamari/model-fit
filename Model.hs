@@ -69,12 +69,14 @@ unpack sources (PP packed) = fmap (fmap f) sources
     f (FromVector (PIdx i)) = fromMaybe (error "unpack: Invalid index") $ packed ^? ix i
 {-# INLINE unpack #-}
 
-chiSquared :: (RealFrac a, Applicative y, Metric y, Foldable curves)
-           => Model param x y a                        -- ^ Model
-           -> curves (param a, V.Vector (Point x y a)) -- ^ Curves and parameters
-           -> a                                        -- ^ Chi squared
-chiSquared m curves =
-    getSum $ foldMap (\(p,curve)->Sum $ chiSquared' m p curve) curves
+chiSquared :: (RealFrac a, Applicative y, Metric y, Foldable curves, Applicative curves)
+           => Model param x y a                -- ^ model
+           -> curves (param a)                 -- ^ parameters
+           -> curves (V.Vector (Point x y a))  -- ^ curves
+           -> a                                -- ^ chi squared
+chiSquared m params curves =
+    getSum $ fold $ (\p curve->Sum $ chiSquared' m p curve) <$> params <*> curves
+{-# INLINE chiSquared #-}
 
 chiSquared' :: (RealFrac a, Applicative y, Metric y)
             => Model param x y a        -- ^ Model
@@ -83,7 +85,7 @@ chiSquared' :: (RealFrac a, Applicative y, Metric y)
             -> a                        -- ^ Chi squared
 chiSquared' (Model model) param curve = F.sum $ fmap f curve
   where f (Point x y var) = quadrance $ (/) <$> (model param x ^-^ y) <*> var
-{-# INLINE chiSquared #-}
+{-# INLINE chiSquared' #-}
 
 countParameters :: Foldable param => param a -> Int
 countParameters = getSum . foldMap (const $ Sum 1)
