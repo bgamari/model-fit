@@ -33,14 +33,14 @@ fit m curves sources p0 =
     map (unpack sources)
     $ conjGrad search fletcherReeves df p0
   where
+    --search = wolfeSearch 0.1 1 1e-4 0.9 f
     search = armijoSearch 0.1 1 1e-4 f
     df :: PackedParams curves param a -> PackedParams curves param a
-    df = finiteDiff (pure 1e-4) f 
+    df = finiteDiff (fmap (const 1e-6) p0) f 
     f :: PackedParams curves param a -> a
-    f packed = let p = unpack sources packed
-               in chiSquared m p curves
+    f packed = chiSquared m (unpack sources packed) curves
   
-finiteDiff :: (Traversable f, Applicative f, Additive f, Metric f, RealFloat a)
+finiteDiff :: (Traversable f, Additive f, Metric f, RealFloat a)
            => f a -> (f a -> a) -> f a -> f a
 finiteDiff h f x = fmap (\h'->(f (x ^+^ h') - f x) / norm h') (kronecker h)
 
@@ -49,9 +49,14 @@ main = do
                                   . (concentration .~ 2)
         params = genParams
         m = diff3DModel
-        points = V.fromList [ Point (V1 x) (model m genParams $ V1 x) (V1 1)
-                            | x <- [1, 10..100] ]
+        points = V.fromList [ let x = 2**i in Point (V1 x) (model m genParams $ V1 x) (V1 1)
+                            | i <- [1, 1.1..4] ]
         sources = fmap (FromVector . PIdx) $ Diff3DP 0 1 2 3
-        packedParams = V.fromList [10,1,3,1]
-    F.forM_ (take 200 $ fit m (Identity points) (Identity sources) (PP packedParams)) $
+        packedParams = V.fromList [5,1,3,1]
+
+    let p = Identity genParams in print $ (chiSquared m p (Identity points), runIdentity p)
+    F.forM_ (takeEvery 200 $ fit m (Identity points) (Identity sources) (PP packedParams)) $
       \p->do print $ (chiSquared m p (Identity points), runIdentity p)
+
+takeEvery :: Int -> [a] -> [a]
+takeEvery n (x:xs) = x : takeEvery n (drop n xs)

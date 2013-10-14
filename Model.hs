@@ -51,7 +51,7 @@ data ParamSource (curves :: * -> *) (param :: * -> *) a
 newtype PackedParams (curves :: * -> *) (param :: * -> *) a
     = PP (V.Vector a)
     deriving ( Show, Additive, Functor, Foldable, Traversable
-             , Applicative, Metric)
+             , Metric)
     
 {-
 type instance Index (PackedParams curves param) = ParamIdx curves param
