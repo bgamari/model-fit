@@ -40,9 +40,9 @@ fit m curves sources p0 =
     f packed = let p = unpack sources packed
                in chiSquared m p curves
   
-finiteDiff :: (Traversable f, Applicative f, Additive f, Num a)
+finiteDiff :: (Traversable f, Applicative f, Additive f, Metric f, RealFloat a)
            => f a -> (f a -> a) -> f a -> f a
-finiteDiff h f x = fmap (\h'->f (x ^+^ h')) (kronecker h)
+finiteDiff h f x = fmap (\h'->(f (x ^+^ h') - f x) / norm h') (kronecker h)
 
 main = do
     let genParams = defaultParams & (diffTime      .~ 10)
@@ -50,8 +50,8 @@ main = do
         params = genParams
         m = diff3DModel
         points = V.fromList [ Point (V1 x) (model m genParams $ V1 x) (V1 1)
-                            | x <- [1, 2..100] ]
+                            | x <- [1, 10..100] ]
         sources = fmap (FromVector . PIdx) $ Diff3DP 0 1 2 3
         packedParams = V.fromList [10,1,3,1]
-    F.mapM_ (print . runIdentity) $ take 200
-      $ fit m (Identity points) (Identity sources) (PP packedParams)
+    F.forM_ (take 200 $ fit m (Identity points) (Identity sources) (PP packedParams)) $
+      \p->do print $ (chiSquared m p (Identity points), runIdentity p)
