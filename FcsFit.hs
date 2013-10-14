@@ -34,7 +34,7 @@ fit m curves sources p0 =
     $ conjGrad search fletcherReeves df p0
   where
     --search = wolfeSearch 0.1 1 1e-4 0.9 f
-    search = armijoSearch 0.1 1 1e-4 f
+    search = armijoSearch 0.1 2 1e-4 f
     df :: PackedParams curves param a -> PackedParams curves param a
     df = finiteDiff (fmap (const 1e-6) p0) f 
     f :: PackedParams curves param a -> a
@@ -50,9 +50,12 @@ main = do
         params = genParams
         m = diff3DModel
         points = V.fromList [ let x = 2**i in Point (V1 x) (model m genParams $ V1 x) (V1 1)
-                            | i <- [1, 1.1..4] ]
-        sources = fmap (FromVector . PIdx) $ Diff3DP 0 1 2 3
-        packedParams = V.fromList [5,1,3,1]
+                            | i <- [1, 1.1..5] ]
+        sources = Diff3DP (FromVector $ PIdx 0)
+                          (Fixed 1)
+                          (FromVector $ PIdx 1)
+                          (FromVector $ PIdx 2)
+        packedParams = V.fromList [5,3,1]
 
     let p = Identity genParams in print $ (chiSquared m p (Identity points), runIdentity p)
     F.forM_ (takeEvery 200 $ fit m (Identity points) (Identity sources) (PP packedParams)) $
