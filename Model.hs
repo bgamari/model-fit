@@ -1,6 +1,7 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE RankNTypes #-}
 
 module Model ( -- * Data points
                Point(Point)
@@ -38,16 +39,22 @@ data Point x y a = Point { _ptX  :: !(x a)
                  deriving (Show)
 makeLenses ''Point
            
-newtype Model param x y a = Model { model :: param a -> x a -> y a }
+instance (Functor x, Functor y) => Functor (Point x y) where
+    fmap f (Point x y var) = Point (fmap f x) (fmap f y) (fmap f var)
+    
+data Model param x y = Model { model :: forall a. RealFloat a => param a -> x a -> y a }
 
-newtype ParamIdx a
-    = PIdx Int
-    deriving (Show)
+newtype ParamIdx = PIdx Int
+                 deriving (Show)
 
 data ParamSource (curves :: * -> *) (param :: * -> *) a
     = Fixed a
-    | FromVector (ParamIdx a)
+    | FromVector ParamIdx
     deriving (Show)
+    
+instance Functor (ParamSource curves param) where
+    fmap f (Fixed a)      = Fixed (f a)
+    fmap f (FromVector n) = FromVector n
 
 newtype PackedParams (curves :: * -> *) (param :: * -> *) a
     = PP (IM.IntMap a)
@@ -70,8 +77,8 @@ unpack sources (PP packed) = fmap (fmap f) sources
     f (FromVector (PIdx i)) = fromMaybe (error "unpack: Invalid index") $ packed ^? ix i
 {-# INLINE unpack #-}
 
-chiSquared :: (RealFrac a, Applicative y, Metric y, Foldable curves, Applicative curves)
-           => Model param x y a                -- ^ model
+chiSquared :: (RealFloat a, Applicative y, Metric y, Foldable curves, Applicative curves)
+           => Model param x y                  -- ^ model
            -> curves (param a)                 -- ^ parameters
            -> curves (V.Vector (Point x y a))  -- ^ curves
            -> a                                -- ^ chi squared
@@ -79,8 +86,8 @@ chiSquared m params curves =
     getSum $ fold $ (\p curve->Sum $ chiSquared' m p curve) <$> params <*> curves
 {-# INLINE chiSquared #-}
 
-chiSquared' :: (RealFrac a, Applicative y, Metric y)
-            => Model param x y a        -- ^ Model
+chiSquared' :: (RealFloat a, Applicative y, Metric y)
+            => Model param x y          -- ^ Model
             -> param a                  -- ^ Model parameters
             -> V.Vector (Point x y a)   -- ^ Curves
             -> a                        -- ^ Chi squared

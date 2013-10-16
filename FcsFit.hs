@@ -15,6 +15,8 @@ import Control.Lens
 
 import Linear
 import Optimization.LineSearch.ConjugateGradient
+import Numeric.AD
+import Numeric.AD.Types (Mode, AD)
 
 import Model
 import FcsModels
@@ -24,10 +26,12 @@ composeCore :: (Core f, Core g)
 composeCore f = core (\l->core (\m->f (l . m)))
 
 fit :: forall x y a param curves
-     . ( Additive y, Metric y, Applicative y, Applicative curves, Foldable curves
+     . ( Functor x
+       , Additive y, Metric y, Functor y, Applicative y
+       , Applicative curves, Foldable curves
        , RealFloat a, Functor param, Metric (PackedParams curves param)
        )
-    => Model param x y a                 -- ^ Model to fit
+    => Model param x y                   -- ^ Model to fit
     -> curves (V.Vector (Point x y a))   -- ^ Curves to fit
     -> curves (param (ParamSource curves param a))  -- ^ Parameter sources
     -> PackedParams curves param a       -- ^ Initial parameters
@@ -40,9 +44,12 @@ fit m curves sources p0 =
     --search = armijoSearch 0.1 2 1e-4 f
     search = constantSearch 0.01
     df :: PackedParams curves param a -> PackedParams curves param a
-    df = finiteDiff (fmap (const 1e-6) p0) f 
-    f :: PackedParams curves param a -> a
-    f packed = chiSquared m (unpack sources packed) curves
+    df = grad f
+    --df = finiteDiff (fmap (const 1e-6) p0) f 
+    f :: forall a. RealFloat a => PackedParams curves param a -> a
+    f packed = chiSquared m
+                (unpack (fmap (fmap (fmap realToFrac)) sources) $ fmap realToFrac packed)
+                (fmap (fmap (fmap realToFrac)) curves)
   
 finiteDiff :: (Traversable f, Additive f, Metric f, RealFloat a)
            => f a -> (f a -> a) -> f a -> f a

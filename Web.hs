@@ -49,14 +49,14 @@ makeLenses ''Curve
 
 data Session param = Session
     { _sCurves :: V.Vector Curve
-    , _sModel  :: Model param V1 V1 Double
+    , _sModel  :: Model param V1 V1
     , _sParams :: param Double
     }
 makeLenses ''Session    
 
 modelPlot :: (Functor curves, Foldable curves)
           => curves Curve
-          -> Model param V1 V1 Double
+          -> Model param V1 V1
           -> curves (param Double)
           -> [Double]
           -> Layout1 Double Double
@@ -73,7 +73,7 @@ plotCurve c = def & (plot_errbars_title  .~ (c ^. cName))
   where values :: [ErrPoint Double Double]
         values = map toErrPoint $ F.toList (c ^. cPoints)
 
-plotModel :: Model param V1 V1 Double
+plotModel :: Model param V1 V1
           -> param Double
           -> [Double]
           -> PlotLines Double Double
