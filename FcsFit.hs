@@ -3,6 +3,8 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE FlexibleContexts #-}
 
+module FcsFit where 
+
 import Data.Functor.Identity
 import Data.Foldable as F
 import Data.Traversable as T
@@ -15,7 +17,7 @@ import Optimization.LineSearch.ConjugateGradient
 
 import Model
 import FcsModels
-                
+
 composeCore :: (Core f, Core g)
             => (Lens' (f (g a)) a -> b) -> f (g b)
 composeCore f = core (\l->core (\m->f (l . m)))
@@ -34,7 +36,8 @@ fit m curves sources p0 =
     $ conjGrad search fletcherReeves df p0
   where
     --search = wolfeSearch 0.1 1 1e-4 0.9 f
-    search = armijoSearch 0.1 2 1e-4 f
+    --search = armijoSearch 0.1 2 1e-4 f
+    search = constantSearch 0.01
     df :: PackedParams curves param a -> PackedParams curves param a
     df = finiteDiff (fmap (const 1e-6) p0) f 
     f :: PackedParams curves param a -> a
@@ -55,11 +58,12 @@ main = do
                           (Fixed 1)
                           (FromVector $ PIdx 1)
                           (FromVector $ PIdx 2)
-        packedParams = V.fromList [5,3,1]
+        packedParams = PP $ V.fromList [5,3,1]
 
     let p = Identity genParams in print $ (chiSquared m p (Identity points), runIdentity p)
-    F.forM_ (takeEvery 200 $ fit m (Identity points) (Identity sources) (PP packedParams)) $
-      \p->do print $ (chiSquared m p (Identity points), runIdentity p)
+    let fits = takeEvery 200 $ fit m (Identity points) (Identity sources) packedParams
+    F.forM_ fits $ \p->do
+        print (chiSquared m p (Identity points), runIdentity p)
 
 takeEvery :: Int -> [a] -> [a]
 takeEvery n (x:xs) = x : takeEvery n (drop n xs)

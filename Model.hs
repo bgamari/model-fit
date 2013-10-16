@@ -36,7 +36,7 @@ data Point x y a = Point { _ptX  :: !(x a)
                          }
                  deriving (Show)
 makeLenses ''Point
-
+           
 newtype Model param x y a = Model { model :: param a -> x a -> y a }
 
 newtype ParamIdx a
@@ -56,7 +56,7 @@ newtype PackedParams (curves :: * -> *) (param :: * -> *) a
 {-
 type instance Index (PackedParams curves param) = ParamIdx curves param
 instance At (PackedParams curves param) where
-    at
+    at = undefined
 -}
 
 unpack :: (Functor curves, Functor param)
