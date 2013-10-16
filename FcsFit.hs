@@ -10,6 +10,7 @@ import Data.Foldable as F
 import Data.Traversable as T
 import Control.Applicative
 import qualified Data.Vector as V
+import qualified Data.IntMap as IM
 import Control.Lens
 
 import Linear
@@ -58,7 +59,7 @@ main = do
                           (Fixed 1)
                           (FromVector $ PIdx 1)
                           (FromVector $ PIdx 2)
-        packedParams = PP $ V.fromList [5,3,1]
+        packedParams = PP $ IM.fromList $ zip [0..] [5,3,1]
 
     let p = Identity genParams in print $ (chiSquared m p (Identity points), runIdentity p)
     let fits = takeEvery 200 $ fit m (Identity points) (Identity sources) packedParams

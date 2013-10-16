@@ -30,6 +30,7 @@ import Data.Maybe
 import Data.Foldable as F
 import Prelude hiding (product)
 import qualified Data.Vector as V
+import qualified Data.IntMap as IM
 
 data Point x y a = Point { _ptX  :: !(x a)
                          , _ptY, _ptVar :: !(y a)
@@ -49,7 +50,7 @@ data ParamSource (curves :: * -> *) (param :: * -> *) a
     deriving (Show)
 
 newtype PackedParams (curves :: * -> *) (param :: * -> *) a
-    = PP (V.Vector a)
+    = PP (IM.IntMap a)
     deriving ( Show, Additive, Functor, Foldable, Traversable
              , Metric)
     
