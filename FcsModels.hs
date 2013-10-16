@@ -35,6 +35,7 @@ diff3DModel = Model $ \(Diff3DP taud a alpha n) (V1 tau) ->
         c = 1 + tau_taud / a^2
         tau_taud = (tau / taud)**alpha
     in V1 $ 1 / b / sqrt c / n
+{-# INLINE diff3DModel #-}
 
 defaultParams :: Diff3DParams Double
 defaultParams = Diff3DP 100 1 3 1
