@@ -68,8 +68,8 @@ modelPlot curves m params xs =
     modelPlots = F.toList $ fmap (\p->plotModel m p xs) params
 
 plotCurve :: Curve -> PlotErrBars Double Double
-plotCurve c = def & (plot_errbars_title  .~ (c ^. cName))
-                  . (plot_errbars_values .~ values)
+plotCurve c = def & plot_errbars_title  .~ view cName c
+                  & plot_errbars_values .~ values
   where values :: [ErrPoint Double Double]
         values = map toErrPoint $ F.toList (c ^. cPoints)
 
@@ -89,9 +89,9 @@ main = main' >>= print
 main' = runEitherT $ do
     points' <- liftIO (BSL.readFile path) >>= EitherT . return . readPoints
     let points = V.filter (views ptX (>1))
-               $ points' & (mapped . ptY . mapped %~ subtract 1)
-                         . (mapped . ptX . mapped %~ (*1e6))
-    liftIO $ F.mapM_ print points
+               $ points' & mapped . ptY . mapped %~ subtract 1
+                         & mapped . ptX . mapped %~ (*1e6)
+
     let packedParams = PP $ IM.fromList $ zip [0..] [70, 0.8, 0.08]
         sources = Diff3DP { _diffTime      = FromVector $ PIdx 0
                           , _diffExponent  = Fixed 1
