@@ -48,8 +48,8 @@ fit m curves sources p0 =
     --df = finiteDiff (fmap (const 1e-6) p0) f 
     f :: forall a. RealFloat a => PackedParams curves param a -> a
     f packed = chiSquared m
-                (unpack (fmap (fmap (fmap realToFrac)) sources) $ fmap realToFrac packed)
-                (fmap (fmap (fmap realToFrac)) curves)
+                (unpack (over (mapped . mapped . mapped) realToFrac sources) (over mapped realToFrac packed))
+                (over (mapped . mapped . mapped) realToFrac curves)
   
 finiteDiff :: (Traversable f, Additive f, Metric f, RealFloat a)
            => f a -> (f a -> a) -> f a -> f a
