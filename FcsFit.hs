@@ -10,7 +10,6 @@ import Data.Foldable as F
 import Data.Traversable as T
 import Control.Applicative
 import qualified Data.Vector as V
-import qualified Data.IntMap as IM
 import Control.Lens
 
 import Linear
@@ -18,13 +17,8 @@ import Optimization.LineSearch.ConjugateGradient
 import Numeric.AD
 
 import Model
-import FcsModels
 
 import Debug.Trace
-
---composeCore :: (Core f, Core g)
---            => (Lens' (f (g a)) a -> b) -> f (g b)
---composeCore f = core (\l->core (\m->f (l . m)))
 
 fit :: forall x y a param curves
      . ( Functor x
