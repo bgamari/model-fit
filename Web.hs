@@ -84,7 +84,9 @@ toErrPoint :: Num a => Point V1 V1 a -> ErrPoint a a
 toErrPoint (Point (V1 x) (V1 y) (V1 e)) =
     ErrPoint (ErrValue x x x) (ErrValue (y-e) y (y+e))
 
-path = "/home/ben/lori/data/sheema/2013-07-16/2013-07-16-run_001.timetag.acorr-0"
+--path = "/home/ben/lori/data/sheema/2013-07-16/2013-07-16-run_001.timetag.acorr-0"
+path = "hello"
+
 main = main' >>= print
 main' = runEitherT $ do
     points' <- liftIO (BSL.readFile path) >>= EitherT . return . readPoints
@@ -92,7 +94,7 @@ main' = runEitherT $ do
                $ points' & mapped . ptY . mapped %~ subtract 1
                          & mapped . ptX . mapped %~ (*1e6)
 
-    let packedParams = PP $ IM.fromList $ zip [0..] [70, 0.8, 0.08]
+    let packedParams = PP $ IM.fromList $ zip [0..] [47, 14, 0.086]
         sources = Diff3DP { _diffTime      = FromVector $ PIdx 0
                           , _diffExponent  = Fixed 1
                           , _aspectRatio   = FromVector $ PIdx 1
