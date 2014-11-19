@@ -4,14 +4,15 @@
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE TemplateHaskell #-}
 
-module FcsModels ( Diff3DParams(..)
-                 , diffTime
-                 , diffExponent
-                 , aspectRatio
-                 , concentration
-                 , diff3DModel
-                 , defaultParams
-                 ) where
+module Models.Fcs
+    ( Diff3DParams(..)
+    , diffTime
+    , diffExponent
+    , aspectRatio
+    , concentration
+    , diff3DModel
+    , defaultParams
+    ) where
 
 import Model
 import Linear

@@ -9,7 +9,7 @@ import Control.Lens
 
 import Model       
 import Fit
-import FcsModels
+import Models.Fcs
 
 sources = runParamsM $ do
     diff1 <- param 2.3

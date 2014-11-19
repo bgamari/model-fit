@@ -30,7 +30,7 @@ import Data.Default
 
 import Fit
 import Model
-import FcsModels
+import Models.Fcs
 
 instance FromField a => FromField (V1 a) where
     parseField f = V1 <$> parseField f
