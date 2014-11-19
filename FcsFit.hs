@@ -9,46 +9,39 @@ import Data.Functor.Identity
 import Data.Foldable as F
 import Data.Traversable as T
 import Control.Applicative
-import qualified Data.Vector as V
+import Data.Monoid (Monoid (..), Sum (..))
+
 import Control.Lens
+import qualified Data.Vector.Storable as V
 
 import Linear
-import Optimization.LineSearch.ConjugateGradient
-import Numeric.AD
-
+import Numeric.LevMar hiding (Model)
 import Model
 
-import Debug.Trace
+countParameters :: Foldable param => param a -> Int
+countParameters = getSum . foldMap (const $ Sum 1)
+{-# INLINE countParameters #-}
 
-fit :: forall x y a param curves
-     . ( Functor x
-       , Additive y, Metric y, Functor y, Applicative y
-       , Applicative curves, Foldable curves
-       , RealFloat a, Show a
-       , Functor param, Metric (PackedParams curves param)
-       )
-    => Model param x y                   -- ^ Model to fit
-    -> curves (V.Vector (Point x y a))   -- ^ Curves to fit
-    -> curves (param (ParamSource curves param a))  -- ^ Parameter sources
-    -> PackedParams curves param a       -- ^ Initial parameters
-    -> [curves (param a)]
-fit m curves sources p0 =
-    map (unpack sources)
-    $ conjGrad search fletcherReeves df p0
+degreesOfFreedom :: (V.Storable a, Foldable param)
+                 => V.Vector (V2 a) -> param a -> Int
+degreesOfFreedom points param =
+  V.length points - countParameters param
+{-# INLINE degreesOfFreedom #-}
+
+chiSquared :: (Num a, Foldable f)
+           => f (V2 a) -> Model p a -> p a -> a
+chiSquared pts m p = getSum $ foldMap (\pt->Sum $ residual pt $ model m p) pts
+
+leastSquares :: (Traversable p, V.Storable a, RealFloat a, LevMarable a)
+             => V.Vector (V2 a) -> p (Param a) -> Model p a -> Packed V.Vector p a
+             -> Either LevMarError (Packed V.Vector p a)
+leastSquares pts packing (Model m) p0 =
+    case levmar model Nothing (p0 ^. _Wrapped) (V.map (^. _y) pts) 5000 defaultOpts mempty of
+      Left e -> Left e
+      Right (p, _, _) -> Right $ Packed p
   where
-    --search = wolfeSearch 0.1 1 1e-4 0.9 f
-    --search = armijoSearch 0.5 1 1e-4 f
-    search = constantSearch 1e-3
-    df :: Show a => PackedParams curves param a -> PackedParams curves param a
-    df = tr . grad f
-    --df = finiteDiff (fmap (const 1e-6) p0) f 
-    f :: forall a. RealFloat a => PackedParams curves param a -> a
-    f packed = chiSquared m
-                (unpack (over (mapped . mapped . mapped) realToFrac sources) (over mapped realToFrac packed))
-                (over (mapped . mapped . mapped) realToFrac curves)
-  
-tr x = traceShow x x
-  
-finiteDiff :: (Traversable f, Additive f, Metric f, RealFloat a)
-           => f a -> (f a -> a) -> f a -> f a
-finiteDiff h f x = fmap (\h'->(f (x ^+^ h') - f x) / norm h') (kronecker h)
+    model packed = V.map (\(V2 x y) -> m p x - y) pts
+      where p = unpack packing (Packed packed)
+
+residual :: Num a => V2 a -> (a -> a) -> a
+residual pt f = pt^._y - f (pt^._x)

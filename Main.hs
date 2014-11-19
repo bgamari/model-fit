@@ -1,7 +1,8 @@
 import Data.Foldable as F
 import Data.Functor.Identity
-import qualified Data.Vector as V
-import qualified Data.IntMap as IM
+import qualified Data.Vector.Storable as V
+import Control.Applicative
+import Data.Functor.Product
 
 import Linear
 import Control.Lens
@@ -10,23 +11,28 @@ import Model
 import FcsModels
 import FcsFit
 
+sources :: Num a => Product Diff3DParams Diff3DParams (Param a)
+sources = runParamsM $ do
+    diff1 <- param
+    diff2 <- param
+    aspect <- param
+    a <- Diff3DP <$> pure diff1 <*> fixed 1 <*> pure aspect <*> param
+    b <- Diff3DP <$> pure diff2 <*> fixed 1 <*> pure aspect <*> param
+    return $ Pair a b
+
 main = do
-    let genParams = defaultParams & (diffTime      .~ 10)
-                                  . (concentration .~ 2)
-        params = genParams
-        m = diff3DModel
-        points = V.fromList [ let x = 2**i in Point (V1 x) (model m genParams $ V1 x) (V1 1)
-                            | i <- [1, 1.1..5] ]
-        sources = Diff3DP (FromVector $ PIdx 0)
-                          (Fixed 1)
-                          (FromVector $ PIdx 1)
-                          (FromVector $ PIdx 2)
-        packedParams = PP $ IM.fromList $ zip [0..] [5,3,1]
-
-    let p = Identity genParams in print $ (chiSquared m p (Identity points), runIdentity p)
-    let fits = takeEvery 200 $ fit m (Identity points) (Identity sources) packedParams
-    F.forM_ fits $ \p->do
-        print (chiSquared m p (Identity points), runIdentity p)
-
-takeEvery :: Int -> [a] -> [a]
-takeEvery n (x:xs) = x : takeEvery n (drop n xs)
+    let genParams1 = defaultParams & (diffTime      .~ 10)
+                                   . (concentration .~ 2)
+        genParams2 = defaultParams & (diffTime      .~ 30)
+                                   . (concentration .~ 2)
+        genParams = Pair genParams1 genParams2
+        m = opModel (*) diff3DModel diff3DModel
+        points = V.fromList [ let x = 2**i in V2 x (model m genParams x)
+                            | i <- [1, 1.1..10]
+                            ]
+        --ls = embedParams sources
+    --let p0 = (Packed $ V.replicate 3 0) & ls (_1 . diffTime) .~ 10
+    let p0 = Packed $ V.fromList [1,3,5,6,4]
+    let Right fit = leastSquares points sources m p0
+    print genParams
+    print $ unpack sources fit
