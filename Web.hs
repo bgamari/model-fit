@@ -28,7 +28,7 @@ import Graphics.Rendering.Chart hiding (Point)
 import Graphics.Rendering.Chart.Backend.Cairo
 import Data.Default
 
-import FcsFit hiding (main)
+import Fit
 import Model
 import FcsModels
 

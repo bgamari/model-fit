@@ -3,7 +3,7 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE FlexibleContexts #-}
 
-module FcsFit where 
+module Fit where 
 
 import Data.Functor.Identity
 import Data.Foldable as F

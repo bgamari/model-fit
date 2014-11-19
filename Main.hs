@@ -8,8 +8,8 @@ import Linear
 import Control.Lens
 
 import Model       
+import Fit
 import FcsModels
-import FcsFit
 
 sources = runParamsM $ do
     diff1 <- param 2.3
