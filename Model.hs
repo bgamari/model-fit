@@ -53,7 +53,7 @@ vectorIx i f v
   | 0 <= i && i < VG.length v = f (v VG.! i) <&> \a -> v VG.// [(i, a)]
   | otherwise                 = pure v
 
-data Point a = Point { _ptX, _ptY, ptVar :: !a}
+data Point a = Point { _ptX, _ptY, _ptVar :: !a}
              deriving (Show)
 makeLenses ''Point
 

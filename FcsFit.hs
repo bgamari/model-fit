@@ -23,14 +23,16 @@ countParameters = getSum . foldMap (const $ Sum 1)
 {-# INLINE countParameters #-}
 
 degreesOfFreedom :: (V.Storable a, Foldable param)
-                 => V.Vector (V2 a) -> param a -> Int
+                 => V.Vector (Point a) -> param a -> Int
 degreesOfFreedom points param =
   V.length points - countParameters param
 {-# INLINE degreesOfFreedom #-}
 
-chiSquared :: (Num a, Foldable f)
-           => f (V2 a) -> Model p a -> p a -> a
-chiSquared pts m p = getSum $ foldMap (\pt->Sum $ residual pt $ model m p) pts
+chiSquared :: (Fractional a, Foldable f)
+           => f (Point a) -> Model p a -> p a -> a
+chiSquared pts m p = getSum $ foldMap go pts
+  where
+    go pt = Sum $ (residual pt (model m p))^2 / (pt ^. ptVar)
 
 leastSquares :: (Traversable p, V.Storable a, RealFloat a, LevMarable a)
              => p (Param a) -> [(V.Vector (Point a), Model p a)] -> Packed V.Vector p a
@@ -44,5 +46,5 @@ leastSquares packing curves p0 =
     objective packed = V.concat $ map (\(pts, Model m)->V.map (\(Point x y e) -> m p x - y) pts) curves
       where p = unpack packing (Packed packed)
 
-residual :: Num a => V2 a -> (a -> a) -> a
+residual :: Num a => Point a -> (a -> a) -> a
 residual pt f = pt^._y - f (pt^._x)
