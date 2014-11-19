@@ -30,7 +30,8 @@ main = do
         points = V.fromList [ let x = 2**i in V2 x (model m genParams x)
                             | i <- [1, 1.1..10]
                             ]
-    let Right fit = leastSquares points packing m p0
+
+    let Right fit = leastSquares packing [(points,m)] p0
     print genParams
     print $ unpack packing p0
     print $ unpack packing fit

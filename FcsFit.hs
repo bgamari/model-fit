@@ -33,14 +33,15 @@ chiSquared :: (Num a, Foldable f)
 chiSquared pts m p = getSum $ foldMap (\pt->Sum $ residual pt $ model m p) pts
 
 leastSquares :: (Traversable p, V.Storable a, RealFloat a, LevMarable a)
-             => V.Vector (V2 a) -> p (Param a) -> Model p a -> Packed V.Vector p a
+             => p (Param a) -> [(V.Vector (V2 a), Model p a)] -> Packed V.Vector p a
              -> Either LevMarError (Packed V.Vector p a)
-leastSquares pts packing (Model m) p0 =
-    case levmar model Nothing (p0 ^. _Wrapped) (V.map (^. _y) pts) 5000 defaultOpts mempty of
+leastSquares packing curves p0 =
+    case levmar objective Nothing (p0 ^. _Wrapped) ys 5000 defaultOpts mempty of
       Left e -> Left e
       Right (p, _, _) -> Right $ Packed p
   where
-    model packed = V.map (\(V2 x y) -> m p x - y) pts
+    ys = V.concat $ map (V.map (^. _y) . fst) curves
+    objective packed = V.concat $ map (\(pts, Model m)->V.map (\(V2 x y) -> m p x - y) pts) curves
       where p = unpack packing (Packed packed)
 
 residual :: Num a => V2 a -> (a -> a) -> a
