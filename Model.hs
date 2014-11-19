@@ -19,7 +19,7 @@ module Model ( -- * Data samples
                -- * Building parameter topologies
              , ParamsM
              , runParamsM
-             , param, fixed, params
+             , param, fixed
                -- * Models
              , Model (..)
              , opModel, sumModel
@@ -42,7 +42,7 @@ import Control.Lens
 import Linear
 
 import qualified Data.Vector.Generic as VG
-import qualified Data.Vector as V
+import qualified Data.Vector.Storable as V
 import qualified Data.Map as M
 
 vectorIx :: VG.Vector v a => Int -> Traversal' (v a) a
@@ -65,20 +65,20 @@ newtype ParamIdx = ParamIdx Int
 data Param a = Param ParamIdx
              | Fixed a
 
-newtype ParamsM a = PM (State Int a)
-                  deriving (Functor, Applicative, Monad)
+newtype ParamsM s a = PM (State (Int, V.Vector s) a)
+                    deriving (Functor, Applicative, Monad)
 
-runParamsM :: ParamsM a -> a
-runParamsM (PM action) = evalState action 0
+runParamsM :: V.Storable a
+           => ParamsM a (f (Param a)) -> (f (Param a), Packed V.Vector f a)
+runParamsM (PM action) = 
+    let (r, (_, p0)) = runState action (0, V.empty)
+    in (r, Packed p0)
 
-param :: ParamsM (Param a)
-param = PM $ state $ \n->(Param $ ParamIdx n, n+1)
+param :: V.Storable a => a -> ParamsM a (Param a)
+param initial = PM $ state $ \(n,v)->(Param $ ParamIdx n, (n+1, v `V.snoc` initial))
 
-fixed :: a -> ParamsM (Param a)
+fixed :: a -> ParamsM s (Param a)
 fixed = pure . Fixed
-
-params :: (Applicative f, Traversable f) => ParamsM (f (Param a))
-params = sequence $ pure param
 
 -- Packing parameters
 

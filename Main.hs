@@ -11,13 +11,12 @@ import Model
 import FcsModels
 import FcsFit
 
-sources :: Num a => Product Diff3DParams Diff3DParams (Param a)
 sources = runParamsM $ do
-    diff1 <- param
-    diff2 <- param
-    aspect <- param
-    a <- Diff3DP <$> pure diff1 <*> fixed 1 <*> pure aspect <*> param
-    b <- Diff3DP <$> pure diff2 <*> fixed 1 <*> pure aspect <*> param
+    diff1 <- param 2.3
+    diff2 <- param 3.2
+    aspect <- param 10
+    a <- Diff3DP <$> pure diff1 <*> fixed 1 <*> pure aspect <*> param 1
+    b <- Diff3DP <$> pure diff2 <*> fixed 1 <*> pure aspect <*> param 1
     return $ Pair a b
 
 main = do
@@ -27,12 +26,11 @@ main = do
                                    . (concentration .~ 2)
         genParams = Pair genParams1 genParams2
         m = opModel (*) diff3DModel diff3DModel
+        (packing, p0) = sources
         points = V.fromList [ let x = 2**i in V2 x (model m genParams x)
                             | i <- [1, 1.1..10]
                             ]
-        --ls = embedParams sources
-    --let p0 = (Packed $ V.replicate 3 0) & ls (_1 . diffTime) .~ 10
-    let p0 = Packed $ V.fromList [1,3,5,6,4]
-    let Right fit = leastSquares points sources m p0
+    let Right fit = leastSquares points packing m p0
     print genParams
-    print $ unpack sources fit
+    print $ unpack packing p0
+    print $ unpack packing fit
