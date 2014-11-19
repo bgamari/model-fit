@@ -1,13 +1,16 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE TypeFamilies #-}
 
+import Prelude hiding (sequence)
 import Data.Functor.Identity
 import Control.Applicative
-import Control.Monad       
+import Control.Monad (mzero)
 import Control.Monad.IO.Class
 import Control.Lens
 import Control.Error
 import Data.Foldable as F
+import Data.Traversable
 import Data.Char (ord)
 
 import qualified Data.Text as T
@@ -15,6 +18,7 @@ import Data.Text (Text)
 
 import qualified Data.IntMap as IM
 import qualified Data.Vector as V
+import qualified Data.Vector.Storable as VS
 import qualified Data.ByteString.Lazy as BSL
 import Data.Csv as Csv
 
@@ -31,38 +35,38 @@ import FcsModels
 instance FromField a => FromField (V1 a) where
     parseField f = V1 <$> parseField f
 
-instance FromRecord (Point V1 V1 Double) where
+instance FromRecord (Point Double) where
     parseRecord v
       | V.length v == 3 = Point <$> v Csv..! 0
                                 <*> v Csv..! 1
                                 <*> v Csv..! 2
       | otherwise       = mzero
 
-readPoints :: BSL.ByteString -> Either String (V.Vector (Point V1 V1 Double))
-readPoints = Csv.decodeWith decOpts True
+readPoints :: BSL.ByteString -> Either String (V.Vector (Point Double))
+readPoints = Csv.decodeWith decOpts HasHeader
   where decOpts = defaultDecodeOptions { decDelimiter = fromIntegral $ ord ' ' }
  
-data Curve = Curve { _cPoints :: V.Vector (Point V1 V1 Double)
+data Curve = Curve { _cPoints :: VS.Vector (Point Double)
                    , _cName   :: String
                    }
 makeLenses ''Curve    
 
 data Session param = Session
     { _sCurves :: V.Vector Curve
-    , _sModel  :: Model param V1 V1
+    , _sModel  :: Model param Double
     , _sParams :: param Double
     }
 makeLenses ''Session    
 
-modelPlot :: (Functor curves, Foldable curves)
+modelPlot :: (a ~ Double, Functor curves, Foldable curves)
           => curves Curve
-          -> Model param V1 V1
-          -> curves (param Double)
-          -> [Double]
-          -> Layout1 Double Double
+          -> Model param a
+          -> curves (param a)
+          -> [a]
+          -> Layout a a
 modelPlot curves m params xs =
-    def & layout1_plots .~ ( map (Left . toPlot) curvePlots
-                          ++ map (Left . toPlot) modelPlots)
+    def & layout_plots .~ ( map toPlot curvePlots
+                         ++ map toPlot modelPlots)
   where
     curvePlots = F.toList $ fmap plotCurve curves
     modelPlots = F.toList $ fmap (\p->plotModel m p xs) params
@@ -71,17 +75,18 @@ plotCurve :: Curve -> PlotErrBars Double Double
 plotCurve c = def & plot_errbars_title  .~ view cName c
                   & plot_errbars_values .~ values
   where values :: [ErrPoint Double Double]
-        values = map toErrPoint $ F.toList (c ^. cPoints)
+        values = map toErrPoint $ VS.toList (c ^. cPoints)
 
-plotModel :: Model param V1 V1
-          -> param Double
-          -> [Double]
-          -> PlotLines Double Double
+plotModel :: RealFloat a
+          => Model param a
+          -> param a
+          -> [a]
+          -> PlotLines a a
 plotModel m p xs =
-    def & plot_lines_values .~ [map (\x->(x, model m p (V1 x) ^. _x)) xs]
+    def & plot_lines_values .~ [map (\x->(x, model m p x)) xs]
 
-toErrPoint :: Num a => Point V1 V1 a -> ErrPoint a a
-toErrPoint (Point (V1 x) (V1 y) (V1 e)) =
+toErrPoint :: Num a => Point a -> ErrPoint a a
+toErrPoint (Point x y e) =
     ErrPoint (ErrValue x x x) (ErrValue (y-e) y (y+e))
 
 --path = "/home/ben/lori/data/sheema/2013-07-16/2013-07-16-run_001.timetag.acorr-0"
@@ -90,29 +95,27 @@ path = "hello"
 main = main' >>= print
 main' = runEitherT $ do
     points' <- liftIO (BSL.readFile path) >>= EitherT . return . readPoints
-    let points = V.filter (views ptX (>1))
-               $ points' & mapped . ptY . mapped %~ subtract 1
-                         & mapped . ptX . mapped %~ (*1e6)
+    let points = VS.filter (views ptX (>1))
+               $ points' & mapped . ptY %~ subtract 1
+                         & mapped . ptX %~ (*1e6)
+                         & VS.convert
 
-    let packedParams = PP $ IM.fromList $ zip [0..] [47, 14, 0.086]
-        sources = Diff3DP { _diffTime      = FromVector $ PIdx 0
-                          , _diffExponent  = Fixed 1
-                          , _aspectRatio   = FromVector $ PIdx 1
-                          , _concentration = FromVector $ PIdx 2
-                          }
+    let (packing, p0) = runParamsM $ sequence $
+            Diff3DP { _diffTime      = param 10
+                    , _diffExponent  = fixed 1
+                    , _aspectRatio   = param 10
+                    , _concentration = param 1
+                    }
         m = diff3DModel
-        fits = takeEvery 200 $ fit m (Identity points) (Identity sources) packedParams
+        Right fit = leastSquares packing [(points, m)] p0
 
-    let unpck = runIdentity $ unpack (Identity sources) packedParams
-        xs = [10**i | i <- [0, 0.01 .. 4]]
-    liftIO $ renderableToSVGFile
-        ( toRenderable
-        $ layout1_plots .~ [ Left $ toPlot $ plotCurve $ Curve points "hi"
-                           , Left $ toPlot $ plotModel m unpck xs]
-        $ layout1_bottom_axis . laxis_generate .~ autoScaledLogAxis def
-        $ def
-        ) 640 480 "hi.svg"
+    let xs = [10**i | i <- [0, 0.01 .. 4]]
+    liftIO $ renderableToFile def "hi.png"
+           $ toRenderable
+           $ layout_plots .~ [ toPlot $ plotCurve $ Curve points "hi"
+                             , toPlot $ plotModel m (unpack packing fit) xs]
+       --  $ layout_bottom_axis . laxis_generate .~ autoScaledLogAxis def
+           $ def
 
-    liftIO $ F.forM_ fits $ \p->do
-        print (chiSquared m p (Identity points), runIdentity p)
+    liftIO $ print (chiSquared (VS.toList points) m (unpack packing fit), unpack packing fit)
     return ()
