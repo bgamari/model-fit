@@ -43,7 +43,7 @@ leastSquares packing curves p0 =
       Right (p, _, _) -> Right $ Packed p
   where
     ys = V.concat $ map (V.map (^. _y) . fst) curves
-    objective packed = V.concat $ map (\(pts, Model m)->V.map (\(Point x y e) -> m p x - y) pts) curves
+    objective packed = V.concat $ map (\(pts, Model m)->V.map (\(Point x _ e) -> m p x) pts) curves
       where p = unpack packing (Packed packed)
 
 residual :: Num a => Point a -> (a -> a) -> a

@@ -109,12 +109,12 @@ main' = runEitherT $ do
         m = diff3DModel
         Right fit = leastSquares packing [(points, m)] p0
 
-    let xs = [10**i | i <- [0, 0.01 .. 4]]
+    let xs = [10**i | i <- [0, 0.01 .. 6]]
     liftIO $ renderableToFile def "hi.png"
            $ toRenderable
            $ layout_plots .~ [ toPlot $ plotCurve $ Curve points "hi"
                              , toPlot $ plotModel m (unpack packing fit) xs]
-           $ layout_y_axis . laxis_generate .~ autoScaledLogAxis def
+           $ layout_x_axis . laxis_generate .~ autoScaledLogAxis def
            $ def
 
     liftIO $ print (chiSquared (VS.toList points) m (unpack packing fit), unpack packing fit)
