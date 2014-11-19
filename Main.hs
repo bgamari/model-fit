@@ -27,7 +27,7 @@ main = do
         genParams = Pair genParams1 genParams2
         m = opModel (*) diff3DModel diff3DModel
         (packing, p0) = sources
-        points = V.fromList [ let x = 2**i in V2 x (model m genParams x)
+        points = V.fromList [ let x = 2**i in Point x (model m genParams x) 1
                             | i <- [1, 1.1..10]
                             ]
 
