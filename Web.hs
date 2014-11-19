@@ -114,7 +114,7 @@ main' = runEitherT $ do
            $ toRenderable
            $ layout_plots .~ [ toPlot $ plotCurve $ Curve points "hi"
                              , toPlot $ plotModel m (unpack packing fit) xs]
-       --  $ layout_bottom_axis . laxis_generate .~ autoScaledLogAxis def
+           $ layout_y_axis . laxis_generate .~ autoScaledLogAxis def
            $ def
 
     liftIO $ print (chiSquared (VS.toList points) m (unpack packing fit), unpack packing fit)
