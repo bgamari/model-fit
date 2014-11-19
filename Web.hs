@@ -118,4 +118,5 @@ main' = runEitherT $ do
            $ def
 
     liftIO $ print (chiSquared (VS.toList points) m (unpack packing fit), unpack packing fit)
+    liftIO $ print (reducedChiSquared points m (unpack packing fit))
     return ()
