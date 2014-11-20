@@ -147,7 +147,7 @@ data ParamDesc a = PD { _paramDescription  :: String
                  deriving (Show)
 makeLenses ''ParamDesc
 
-data Model param a = Model { model :: param a -> a -> a }
+newtype Model param a = Model { model :: param a -> a -> a }
 
 opModel :: RealFloat a
         => (a -> a -> a) -> Model l a -> Model r a -> Model (Product l r) a
