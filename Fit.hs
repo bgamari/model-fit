@@ -3,7 +3,7 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE FlexibleContexts #-}
 
-module Fit where 
+module Fit where
 
 import Data.Functor.Identity
 import Data.Foldable as F
@@ -36,7 +36,8 @@ chiSquared pts m p = getSum $ foldMap go pts
 
 reducedChiSquared :: (V.Storable a, Fractional a, Foldable p)
                   => V.Vector (Point a) -> Model p a -> p a -> a
-reducedChiSquared pts m p = chiSquared (V.toList pts) m p / realToFrac (degreesOfFreedom pts p)
+reducedChiSquared pts m p =
+    chiSquared (V.toList pts) m p / realToFrac (degreesOfFreedom pts p)
 
 leastSquares :: (Traversable p, V.Storable a, RealFloat a, LevMarable a)
              => p (Param a) -> [(V.Vector (Point a), Model p a)] -> Packed V.Vector p a
@@ -47,8 +48,10 @@ leastSquares packing curves p0 =
       Right (p, _, _) -> Right $ Packed p
   where
     ys = V.concat $ map (V.map (const 0) . fst) curves
-    objective packed = V.concat $ map (\(pts, Model m)->V.map (\(Point x y e) -> (m p x - y) / sqrt e) pts) curves
-      where p = unpack packing (Packed packed)
+    objective packed = V.concat $ map (\(pts, Model m)->V.map (\(Point x y e) -> (mp x - y) / sqrt e) pts) curves
+      where
+        -- We first evaluate this to avoid repeating model evaluation if possible
+        mp = m $ unpack packing (Packed packed)
 
 residual :: Num a => Point a -> (a -> a) -> a
 residual pt f = pt^._y - f (pt^._x)
