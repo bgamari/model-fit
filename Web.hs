@@ -20,7 +20,6 @@ import qualified Data.IntMap as IM
 import qualified Data.Vector as V
 import qualified Data.Vector.Storable as VS
 import qualified Data.ByteString.Lazy as BSL
-import Data.Csv as Csv
 
 import Control.Lens
 import Linear
@@ -28,21 +27,11 @@ import Graphics.Rendering.Chart hiding (Point)
 import Graphics.Rendering.Chart.Backend.Cairo
 import Data.Default
 
+import CsvUtils
 import Fit
 import Model
 import Models.Fcs hiding (defaultParams)
 import Models.Lifetime
-
-instance FromField a => FromField (V1 a) where
-    parseField f = V1 <$> parseField f
-
-decodePoints :: BSL.ByteString -> Either String (V.Vector (Point Double))
-decodePoints = Csv.decodeWith decOpts HasHeader
-  where decOpts = defaultDecodeOptions { decDelimiter = fromIntegral $ ord ' ' }
-
-readPoints :: FilePath -> EitherT String IO (V.Vector (Point Double))
-readPoints path =
-    liftIO (BSL.readFile path) >>= EitherT . return . decodePoints
 
 data Curve = Curve { _cPoints :: VS.Vector (Point Double)
                    , _cName   :: String

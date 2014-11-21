@@ -42,3 +42,6 @@ instance FromRecord (Point Double) where
                                 <*> v Csv..! 1
                                 <*> v Csv..! 2
       | otherwise       = mzero
+
+withVar :: (a -> a) -> V2 a -> Point a
+withVar f (V2 x y) = Point x y (f y)
