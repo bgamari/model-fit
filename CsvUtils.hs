@@ -21,5 +21,5 @@ readPoints path =
 instance FromField a => FromField (V1 a) where
     parseField f = V1 <$> parseField f
 
-instance FromField a => FromField (V2 a) where
-    parseField f = V2 <$> parseField f <*> parseField f
+instance FromField a => FromRecord (V2 a) where
+    parseRecord f = V2 <$> f .! 0 <*> f .! 1
