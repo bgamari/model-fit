@@ -6,7 +6,6 @@
 import Prelude hiding (sequence)
 import Data.Functor.Identity
 import Control.Applicative
-import Control.Monad (mzero)
 import Control.Monad.IO.Class
 import Control.Lens
 import Control.Error
@@ -36,13 +35,6 @@ import Models.Lifetime
 
 instance FromField a => FromField (V1 a) where
     parseField f = V1 <$> parseField f
-
-instance FromRecord (Point Double) where
-    parseRecord v
-      | V.length v == 3 = Point <$> v Csv..! 0
-                                <*> v Csv..! 1
-                                <*> v Csv..! 2
-      | otherwise       = mzero
 
 decodePoints :: BSL.ByteString -> Either String (V.Vector (Point Double))
 decodePoints = Csv.decodeWith decOpts HasHeader
@@ -95,9 +87,6 @@ toErrPoint :: Num a => Point a -> ErrPoint a a
 toErrPoint (Point x y e) =
     ErrPoint (ErrValue x x x) (ErrValue (y-e) y (y+e))
 
---path = "/home/ben/lori/data/sheema/2013-07-16/2013-07-16-run_001.timetag.acorr-0"
-path = "hello"
-
 data FitConfig = forall params. (Traversable params, Show (params Double)) => FitConfig
     { setupLayout   :: Layout Double Double -> Layout Double Double
     , prepareObs    :: V.Vector (Point Double) -> V.Vector (Point Double)
@@ -134,6 +123,9 @@ lifetime = FitConfig
                       , _amplitude = param 1
                       }
     }
+
+--path = "/home/ben/lori/data/sheema/2013-07-16/2013-07-16-run_001.timetag.acorr-0"
+path = "hello"
 
 main = main' >>= print
 main' = runEitherT $ do

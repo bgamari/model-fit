@@ -48,10 +48,12 @@ leastSquares packing curves p0 =
       Right (p, _, _) -> Right $ Packed p
   where
     ys = V.concat $ map (V.map (const 0) . fst) curves
-    objective packed = V.concat $ map (\(pts, Model m)->V.map (\(Point x y e) -> (mp x - y) / sqrt e) pts) curves
+    objective packed = V.concat $ map doCurve curves
       where
         -- We first evaluate this to avoid repeating model evaluation if possible
-        mp = m $ unpack packing (Packed packed)
+        doCurve (pts, Model m) = V.map (\(Point x y e) -> (mp x - y) / sqrt e) pts
+          where
+            mp = m $ unpack packing (Packed packed)
 
 residual :: Num a => Point a -> (a -> a) -> a
 residual pt f = pt^._y - f (pt^._x)

@@ -38,8 +38,6 @@ import Data.Maybe
 import Data.Foldable as F
 import Data.Traversable
 import Data.Functor.Product
-import Foreign.Storable
-import Foreign.Ptr (castPtr)
 
 import Control.Lens
 import Linear
@@ -48,32 +46,12 @@ import qualified Data.Vector.Generic as VG
 import qualified Data.Vector.Storable as V
 import qualified Data.Map as M
 
+import Types
+
 vectorIx :: VG.Vector v a => Int -> Traversal' (v a) a
 vectorIx i f v
   | 0 <= i && i < VG.length v = f (v VG.! i) <&> \a -> v VG.// [(i, a)]
   | otherwise                 = pure v
-
-data Point a = Point { _ptX, _ptY, _ptVar :: !a}
-             deriving (Show)
-makeLenses ''Point
-
-instance R1 Point where _x = ptX
-instance R2 Point where _y = ptY
-
-pointV3 :: Iso' (Point a) (V3 a)
-pointV3 = iso rev fwd
-  where
-    fwd (V3 x y e) = Point x y e
-    rev (Point x y e) = V3 x y e
-
-instance (Storable a) => Storable (Point a) where
-    sizeOf p = sizeOf (p ^. pointV3)
-    alignment p = alignment (p ^. pointV3)
-    peek ptr = (^. re pointV3) <$> peek (castPtr ptr)
-    poke ptr p = poke (castPtr ptr) (p ^. pointV3)
-
-instance Functor Point where
-    fmap f (Point x y var) = Point (f x) (f y) (f var)
 
 newtype ParamIdx = ParamIdx Int
                  deriving (Show, Eq, Ord)
