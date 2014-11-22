@@ -22,7 +22,7 @@ module Models.Lifetime
 import Model
 import Control.Lens
 import Data.Foldable
-import Data.Traversable       
+import Data.Traversable
 import Data.Distributive
 import Data.Distributive.Generic
 import GHC.Generics (Generic1)
@@ -31,7 +31,7 @@ import qualified Data.Vector.Storable as VS
 import Data.Complex
 
 import Numeric.FFT.Vector.Unitary
-    
+
 data  LifetimeParams a = LifetimeP { _decayTime :: !a
                                    , _amplitude :: !a
                                    }
@@ -47,8 +47,12 @@ data Irf a = Irf { irfSamples :: !(VS.Vector a)
                  }
 
 -- | Construct an IRF
-mkIrf :: (VS.Storable a) => VS.Vector a -> Int -> Irf a
-mkIrf samples period = Irf (VS.take period samples)
+mkIrf :: (Fractional a, VS.Storable a)
+      => VS.Vector a -> Int -> Irf a
+mkIrf samples period = Irf (VS.map (/ norm) v)
+  where
+    v = VS.take period samples
+    norm = VS.sum v
 
 findPeriod :: (VS.Storable a, Num a, Ord a) => VS.Vector a -> Int
 findPeriod corr = abs $ b - a
@@ -60,23 +64,23 @@ findPeriod corr = abs $ b - a
 findMaxima :: (Ord a) => [(a,b)] -> [b]
 findMaxima = map Heap.payload . toList . Heap.fromList . fmap (uncurry Heap.Entry)
 
-convolve :: Irf Double -> VS.Vector Double -> VS.Vector Double
-convolve irf v = convolveValid (irfSamples irf) v
-         
-convolveValid :: VS.Vector Double -> VS.Vector Double -> VS.Vector Double
-convolveValid a b = run dftC2R $ VS.zipWith (*) a' b'
+convolve :: VS.Vector Double -> VS.Vector Double -> VS.Vector Double
+convolve a b = run dftC2R $ VS.zipWith (*) a' b'
   where
     a' = run dftR2C a
     b' = run dftR2C b
 
 type Time = Double
 
+-- | @convolvedModel irf nbins jiffy decay@ is a model described by
+-- @decay$ convolved with @irf@. The model is valid over @x@ from
+-- 0 to @jiffy * nbins@
 convolvedModel :: Irf Double -> Int -> Time -> Model p Double -> Model p Double
 convolvedModel irf nbins jiffy decay = Model f
   where
-    f p = \x -> convolved VS.! round (x / jiffy)
+    f p = \x -> traceShow (x, x/jiffy) $ convolved VS.! round (x / jiffy)
       where
-        convolved = convolve irf m
+        convolved = convolve (irfSamples irf) m
         m = let mp = model decay p
                 bins = VS.enumFromTo 0 nbins :: VS.Vector Int
             in VS.map (\n->mp (realToFrac n * jiffy)) bins
