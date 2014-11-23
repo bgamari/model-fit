@@ -1,0 +1,7 @@
+*.o
+*.dyn_o
+*.dyn_hi
+*.hi
+*~
+*.png
+cabal.sandbox.config
