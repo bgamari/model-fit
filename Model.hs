@@ -24,6 +24,7 @@ module Model ( -- * Data samples
                -- * Models
              , Model (..)
              , opModel, sumModel
+             , constModel
                -- * Parameters
              , ParamDesc
              , paramDescription
@@ -38,6 +39,7 @@ import Data.Maybe
 import Data.Foldable as F
 import Data.Traversable
 import Data.Functor.Product
+import Data.Functor.Identity
 
 import Control.Lens
 import Linear
@@ -133,3 +135,6 @@ opModel op (Model a) (Model b) = Model $ \(Pair pa pb) x -> a pa x `op` b pb x
 
 sumModel :: RealFloat y => Model a y -> Model b y -> Model (Product a b) y
 sumModel = opModel (+)
+
+constModel :: Model Identity a
+constModel = Model $ \(Identity p) _ -> p
