@@ -40,7 +40,7 @@ makeLenses ''LifetimeParams
 instance Distributive LifetimeParams where distribute = genericDistribute
 
 lifetimeModel :: RealFloat a => Model LifetimeParams a
-lifetimeModel = Model $ \(LifetimeP taud amp) tau -> amp * exp (-tau / taud)
+lifetimeModel = Model $ \(LifetimeP taud amp) tau -> amp * exp (-tau / taud) / taud
 {-# INLINE lifetimeModel #-}
 
 data Irf a = Irf { irfSamples :: !(VS.Vector a)
@@ -78,9 +78,16 @@ type Time = Double
 convolvedModel :: Irf Double -> Int -> Time -> Model p Double -> Model p Double
 convolvedModel irf nbins jiffy decay = Model f
   where
-    f p = \x -> traceShow (x, x/jiffy) $ convolved VS.! round (x / jiffy)
+    --paddedLength = nbins + VS.length (irfSamples irf) - 1
+    paddedLength = nbins
+    paddedIrf = padTo paddedLength 0 (irfSamples irf)
+
+    f p = \x -> convolved VS.! round (x / jiffy)
       where
-        convolved = convolve (irfSamples irf) m
+        convolved = convolve paddedIrf (padTo paddedLength 0 m)
         m = let mp = model decay p
                 bins = VS.enumFromTo 0 nbins :: VS.Vector Int
             in VS.map (\n->mp (realToFrac n * jiffy)) bins
+
+padTo :: VS.Storable a => Int -> a -> VS.Vector a -> VS.Vector a
+padTo n x v = VS.concat [v, VS.replicate (n - VS.length v) x]
