@@ -38,7 +38,7 @@ jiffy = 8 :: Double
 
 main = printing $ do
     args <- liftIO $ execParser $ info (helper <*> opts) (fullDesc <> progDesc "Fit fluorescence decays")
-    let withPoissonVar = withVar sqrt
+    let withPoissonVar = withVar id
     irfPts <- V.map withPoissonVar <$> readPoints (irfPath args)
     fluorPts <- V.map withPoissonVar <$> readPoints (fluorPath args)
 
