@@ -23,3 +23,6 @@ instance FromField a => FromField (V1 a) where
 
 instance FromField a => FromRecord (V2 a) where
     parseRecord f = V2 <$> f .! 0 <*> f .! 1
+
+instance FromField a => FromRecord (V1 a) where
+    parseRecord f = V1 <$> f .! 0
