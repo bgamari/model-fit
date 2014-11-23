@@ -131,7 +131,10 @@ newtype Model param a = Model { model :: param a -> a -> a }
 
 opModel :: RealFloat a
         => (a -> a -> a) -> Model l a -> Model r a -> Model (Product l r) a
-opModel op (Model a) (Model b) = Model $ \(Pair pa pb) x -> a pa x `op` b pb x
+opModel op (Model a) (Model b) =
+    Model $ \(Pair pa pb) -> let a' = a pa
+                                 b' = b pb
+                             in \x -> a' x `op` b' x
 {-# INLINEABLE opModel #-}
 
 sumModel :: RealFloat y => Model a y -> Model b y -> Model (Product a b) y
