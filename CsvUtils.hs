@@ -12,7 +12,7 @@ import Linear
 
 decodePoints :: FromRecord a => BSL.ByteString -> Either String (V.Vector a)
 decodePoints = Csv.decodeWith decOpts HasHeader
-  where decOpts = defaultDecodeOptions { decDelimiter = fromIntegral $ ord ' ' }
+  where decOpts = defaultDecodeOptions { decDelimiter = fromIntegral $ ord '\t' }
 
 readPoints :: FromRecord a => FilePath -> EitherT String IO (V.Vector a)
 readPoints path =

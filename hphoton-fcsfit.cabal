@@ -14,7 +14,6 @@ cabal-version:       >=1.10
 
 executable hphoton-fcsfit
   main-is:             Main.hs
-  -- other-modules:       
   other-extensions:    DeriveFunctor,
                        DeriveFoldable,
                        DeriveTraversable,
@@ -78,4 +77,41 @@ executable hphoton-fcsfit-web
                        levmar,
                        heaps,
                        vector-fftw
+  default-language:    Haskell2010
+
+executable hphoton-lifetime
+  main-is:             LifetimeFit.hs
+  other-extensions:    DeriveFunctor,
+                       DeriveFoldable,
+                       DeriveTraversable,
+                       TemplateHaskell,
+                       KindSignatures,
+                       GeneralizedNewtypeDeriving,
+                       RankNTypes,
+                       FlexibleInstances,
+                       ScopedTypeVariables,
+                       FlexibleContexts
+  build-depends:       base >=4.7 && <4.8,
+                       linear >=1.12 && <1.13,
+                       lens >=4.4 && <4.8,
+                       vector >=0.10 && <0.11,
+                       containers >=0.5 && <0.6,
+                       transformers >=0.4 && <0.5,
+                       errors >=1.4 && <1.5,
+                       either,
+                       heaps,
+                       vector-fftw,
+                       colour,
+                       optparse-applicative,
+                       text >=1.1 && <1.2,
+                       bytestring >=0.10 && <0.11,
+                       cassava >=0.4 && <0.5,
+                       Chart >=1.3 && <1.4,
+                       Chart-cairo >=1.3 && <1.4,
+                       data-default >=0.5 && <0.6,
+                       optimization >=0.1 && <0.2,
+                       ad >=4.2 && <4.3,
+                       distributive >= 0.4.2 && <0.5,
+                       adjunctions,
+                       levmar
   default-language:    Haskell2010
