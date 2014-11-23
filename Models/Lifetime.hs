@@ -23,6 +23,7 @@ import Model
 import Control.Lens
 import Data.Foldable
 import Data.Traversable
+import Data.Functor.Classes
 import Data.Distributive
 import Data.Distributive.Generic
 import GHC.Generics (Generic1)
@@ -38,6 +39,11 @@ data  LifetimeParams a = LifetimeP { _decayTime :: !a
                        deriving (Show, Functor, Foldable, Traversable, Generic1)
 makeLenses ''LifetimeParams
 instance Distributive LifetimeParams where distribute = genericDistribute
+
+
+instance Show1 LifetimeParams where
+    showsPrec1 prec (LifetimeP decay amp) a =
+        "(Lifetime "++show decay++" "++show amp++")"++a
 
 lifetimeModel :: RealFloat a => Model LifetimeParams a
 lifetimeModel = Model $ \(LifetimeP taud amp) tau -> amp * exp (-tau / taud) / taud
