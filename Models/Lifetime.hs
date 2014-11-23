@@ -69,6 +69,7 @@ convolve a b = run dftC2R $ VS.zipWith (*) a' b'
   where
     a' = run dftR2C a
     b' = run dftR2C b
+{-# INLINEABLE convolve #-}
 
 type Time = Double
 
@@ -88,6 +89,8 @@ convolvedModel irf nbins jiffy decay = Model f
         m = let mp = model decay p
                 bins = VS.enumFromTo 0 nbins :: VS.Vector Int
             in VS.map (\n->mp (realToFrac n * jiffy)) bins
+{-# INLINEABLE convolvedModel #-}
 
 padTo :: VS.Storable a => Int -> a -> VS.Vector a -> VS.Vector a
 padTo n x v = VS.concat [v, VS.replicate (n - VS.length v) x]
+{-# INLINEABLE padTo #-}
