@@ -30,7 +30,7 @@ import qualified Data.Heap as Heap
 import qualified Data.Vector.Storable as VS
 import Data.Complex
 
-import Numeric.FFT.Vector.Unitary
+import Numeric.FFT.Vector.Invertible
 
 data  LifetimeParams a = LifetimeP { _decayTime :: !a
                                    , _amplitude :: !a
