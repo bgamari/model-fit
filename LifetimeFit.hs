@@ -42,18 +42,19 @@ main = printing $ do
     irfPts <- V.map withPoissonVar <$> readPoints (irfPath args)
     fluorPts <- V.map withPoissonVar <$> readPoints (fluorPath args)
 
-    let period = round $ 1/80e6 / (jiffy * 1e-12)
-        irf = mkIrf (V.convert $ V.map (subtract 30) $ V.map (^._y) irfPts) (2*period)
+    let irfHist = V.convert $ V.map (subtract 30) $ V.map (^._y) irfPts
+        --period = round $ 1/80e6 / (jiffy * 1e-12)
+        period = findPeriod irfHist
+        periods = 2
+        irf = mkIrf irfHist (periods*period)
 
     let decayModel = sumModel lifetimeModel lifetimeModel
         --decayModel = lifetimeModel
-        m = sumModel (convolvedModel irf (2*period) jiffy decayModel) constModel
+        m = sumModel (convolvedModel irf (periods*period) jiffy decayModel) constModel
         --m = convolvedModel irf (2*period) jiffy decayModel
 
     let fluorBg = V.head fluorPts ^. _y
-    let ts = take 2000 $ V.toList $ V.map (^._x) irfPts
-        params = LifetimeP 1000 11
-        (packing, p0) = runParamsM $ do
+    let (packing, p0) = runParamsM $ do
             a <- sequence $ LifetimeP { _decayTime = param 2000
                                       , _amplitude = param 10000
                                       }
@@ -63,18 +64,19 @@ main = printing $ do
             c <- Identity <$> param fluorBg
             return $ Pair (Pair a b) c
             --return $ Pair a c
-            --return b
 
-    let Right fit = leastSquares packing [(V.convert $ V.take 2000 $ fluorPts, m)] p0
+    let Right fit = leastSquares packing [(V.convert $ V.take period $ fluorPts, m)] p0
     --let fit = p0
 
     liftIO $ plot "hi.png" [ let f = model m (unpack packing fit)
+                                 ts = take 3000 $ V.toList $ V.map (^._x) irfPts
                              in map (\t->(t, f t)) ts
                            , zip [jiffy*i | i <- [0..]] (toListOf (each . _y) fluorPts)
                            ]
     let unpacked = unpack packing fit
+    liftIO $ print period
     liftIO $ print unpacked
-    liftIO $ putStrLn $ "Reduced Chi squared: "++show (reducedChiSquared (V.convert $ V.take 2000 fluorPts) m unpacked)
+    liftIO $ putStrLn $ "Reduced Chi squared: "++show (reducedChiSquared (V.convert $ V.take period fluorPts) m unpacked)
 
     return ()
 
