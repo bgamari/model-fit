@@ -50,6 +50,7 @@ main = printing $ do
         m = sumModel (convolvedModel irf (2*period) jiffy decayModel) constModel
         --m = convolvedModel irf (2*period) jiffy decayModel
 
+    let fluorBg = V.head fluorPts ^. _y
     let ts = take 2000 $ V.toList $ V.map (^._x) irfPts
         params = LifetimeP 1000 11
         (packing, p0) = runParamsM $ do
@@ -59,7 +60,7 @@ main = printing $ do
             b <- sequence $ LifetimeP { _decayTime = param 4000
                                       , _amplitude = param 10000
                                       }
-            c <- Identity <$> param 105
+            c <- Identity <$> param fluorBg
             return $ Pair (Pair a b) c
             --return $ Pair a c
             --return b
