@@ -132,9 +132,12 @@ newtype Model param a = Model { model :: param a -> a -> a }
 opModel :: RealFloat a
         => (a -> a -> a) -> Model l a -> Model r a -> Model (Product l r) a
 opModel op (Model a) (Model b) = Model $ \(Pair pa pb) x -> a pa x `op` b pb x
+{-# INLINEABLE opModel #-}
 
 sumModel :: RealFloat y => Model a y -> Model b y -> Model (Product a b) y
 sumModel = opModel (+)
+{-# INLINEABLE sumModel #-}
 
 constModel :: Model Identity a
 constModel = Model $ \(Identity p) _ -> p
+{-# INLINEABLE constModel #-}
