@@ -54,12 +54,13 @@ main = printing $ do
         --m = convolvedModel irf (2*period) jiffy decayModel
 
     let fluorBg = V.head fluorPts ^. _y
+        Just fluorAmp = maximumOf (each . _y) fluorPts
     let (packing, p0) = runParamsM $ do
             a <- sequence $ LifetimeP { _decayTime = param 2000
-                                      , _amplitude = param 10000
+                                      , _amplitude = param (fluorAmp / 2)
                                       }
             b <- sequence $ LifetimeP { _decayTime = param 4000
-                                      , _amplitude = param 10000
+                                      , _amplitude = param (fluorAmp / 2)
                                       }
             c <- Identity <$> param fluorBg
             return $ Pair (Pair a b) c
