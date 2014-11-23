@@ -46,7 +46,7 @@ instance Show1 LifetimeParams where
         "(Lifetime "++show decay++" "++show amp++")"++a
 
 lifetimeModel :: RealFloat a => Model LifetimeParams a
-lifetimeModel = Model $ \(LifetimeP taud amp) tau -> amp * exp (-tau / taud) / taud
+lifetimeModel = Model $ \(LifetimeP taud amp) tau -> amp * exp (-tau / taud)
 {-# INLINE lifetimeModel #-}
 
 data Irf a = Irf { irfSamples :: !(VS.Vector a)
