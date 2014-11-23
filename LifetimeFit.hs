@@ -74,6 +74,8 @@ main = printing $ do
                            ]
     let unpacked = unpack packing fit
     liftIO $ print unpacked
+    liftIO $ putStrLn $ "Reduced Chi squared: "++show (reducedChiSquared (V.convert $ V.take 2000 fluorPts) m unpacked)
+
     return ()
 
 plot :: FilePath -> [[(Double, Double)]] -> IO ()
