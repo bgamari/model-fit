@@ -36,11 +36,13 @@ printing action = runEitherT action >>= either print return
 
 jiffy = 8 :: Double
 
+dropLast n v = V.take (V.length v - n) v
+
 main = printing $ do
     args <- liftIO $ execParser $ info (helper <*> opts) (fullDesc <> progDesc "Fit fluorescence decays")
     let withPoissonVar = withVar id
-    irfPts <- V.map withPoissonVar <$> readPoints (irfPath args)
-    fluorPts <- V.map withPoissonVar <$> readPoints (fluorPath args)
+    irfPts <- V.take 4095 . V.map withPoissonVar <$> readPoints (irfPath args)
+    fluorPts <- V.take 4095 . V.map withPoissonVar <$> readPoints (fluorPath args)
 
     let irfHist = V.convert $ V.map (subtract 30) $ V.map (^._y) irfPts
         --period = round $ 1/80e6 / (jiffy * 1e-12)
@@ -74,6 +76,7 @@ main = printing $ do
                              in map (\t->(t, f t)) ts
                            , zip [jiffy*i | i <- [0..]] (toListOf (each . _y) fluorPts)
                            ]
+    liftIO $ print $ unpack packing p0
     let unpacked = unpack packing fit
     liftIO $ print period
     liftIO $ print unpacked
