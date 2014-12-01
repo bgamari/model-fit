@@ -7,6 +7,7 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE ExistentialQuantification #-}
 
 module Model ( -- * Data samples
                Point (Point)
@@ -18,23 +19,22 @@ module Model ( -- * Data samples
              , unpack
              , embedParams
                -- * Building parameter topologies
-             , ParamsM
-             , runParamsM
+             , FitM
+             , runFitM
              , param, fixed
+             , fit
+             , Curve(..)
                -- * Models
              , Model (..)
              , opModel, sumModel
              , constModel
-               -- * Parameters
-             , ParamDesc
-             , paramDescription
-             , paramUnit
              ) where
 
 import Prelude hiding (sequence, foldl, mapM, product)
 import Data.Monoid (Monoid (..))
 import Control.Applicative
-import Control.Monad.Trans.State
+import Control.Monad.RWS (RWS, runRWS, tell)
+import Control.Monad.State (State, evalState, get, put)
 import Data.Maybe
 import Data.Foldable as F
 import Data.Traversable
@@ -45,7 +45,7 @@ import Control.Lens
 import Linear
 
 import qualified Data.Vector.Generic as VG
-import qualified Data.Vector.Storable as V
+import qualified Data.Vector.Storable as VS
 import qualified Data.Map as M
 
 import Types
@@ -55,42 +55,44 @@ vectorIx i f v
   | 0 <= i && i < VG.length v = f (v VG.! i) <&> \a -> v VG.// [(i, a)]
   | otherwise                 = pure v
 
+newtype Model param a = Model { model :: param a -> a -> a }
+
 newtype ParamIdx = ParamIdx Int
                  deriving (Show, Eq, Ord)
 
 data Param a = Param ParamIdx
              | Fixed a
 
-newtype ParamsM s a = PM (State (Int, V.Vector s) a)
-                    deriving (Functor, Applicative, Monad)
-
-runParamsM :: V.Storable a
-           => ParamsM a (f (Param a)) -> (f (Param a), Packed V.Vector f a)
-runParamsM (PM action) = 
-    let (r, (_, p0)) = runState action (0, V.empty)
-    in (r, Packed p0)
-
-param :: V.Storable a => a -> ParamsM a (Param a)
-param initial = PM $ state $ \(n,v)->(Param $ ParamIdx n, (n+1, v `V.snoc` initial))
-
-fixed :: a -> ParamsM s (Param a)
-fixed = pure . Fixed
-
--- Packing parameters
-
 -- | A packed representation of a subset
-data Packed v (f :: * -> *) a = Packed (v a)
-                              deriving (Show)
+data Packed v a = Packed (v a)
+                deriving (Show)
 makeWrapped ''Packed
 
-{-
-type instance Index (PackedParams curves param) = ParamIdx curves param
-instance At (PackedParams curves param) where
-    at = undefined
--}
+-- | The information necessary to compute a model over a curve            
+data Curve a = forall f. Curve { curvePoints :: VS.Vector (Point a)
+                               , curveModel  :: Packed VS.Vector a -> a -> a
+                               }
+
+newtype FitM s a = FM (RWS () [Curve s] ([ParamIdx], VS.Vector s) a)
+                 deriving (Functor, Applicative, Monad)
+
+popParamIdx :: FitM s ParamIdx
+popParamIdx = FM $ do 
+    idx <- use $ singular $ _1 . _head 
+    _1 %= tail
+    return idx
+
+param :: VS.Storable a => a -> FitM a (Param a)
+param initial = do
+    idx <- popParamIdx
+    FM $ _2 %= (`VG.snoc` initial)
+    return $ Param idx
+
+fixed :: a -> FitM s (Param a)
+fixed = pure . Fixed
 
 embedParams :: (VG.Vector v a, Traversable f)
-            => f (Param a) -> (forall b. Lens' (f b) b) -> Lens' (Packed v f a) a
+            => f (Param a) -> (forall b. Lens' (f b) b) -> Lens' (Packed v a) a
 embedParams idx l = singular $ _Wrapped' . vectorIx (mapping ^. l)
   where
     mapping = indexes idx
@@ -98,7 +100,7 @@ embedParams idx l = singular $ _Wrapped' . vectorIx (mapping ^. l)
 indexes :: (Traversable f) => f (Param a) -> f Int
 indexes idx = evalState (mapM go idx) ([0..], M.empty)
   where
-    go (Fixed x) = error "oh no"
+    go (Fixed x) = error "indexes: oh no"
     go (Param x) = do
       (next:rest, table) <- get
       case M.lookup x table of
@@ -107,7 +109,7 @@ indexes idx = evalState (mapM go idx) ([0..], M.empty)
                       return next
 
 unpack :: (VG.Vector v a, Traversable f)
-       => f (Param a) -> Packed v f a -> f a
+       => f (Param a) -> Packed v a -> f a
 unpack idx packed = evalState (mapM go idx) ([0..], M.empty)
   where
     go (Fixed x) = return x
@@ -120,14 +122,25 @@ unpack idx packed = evalState (mapM go idx) ([0..], M.empty)
       return (packed ^. _Wrapped . to (VG.! i))
 {-# INLINABLE unpack #-}
 
+-- | Fit a curve against a model, returning a function unpacking the
+-- model parameters
+fit :: (VS.Storable a, Traversable f)
+    => VS.Vector (Point a)       -- ^ Observed points
+    -> Model f a                -- ^ The model
+    -> f (FitM a (Param a))     -- ^ The model parameters
+    -> FitM a (Packed VS.Vector a -> f a)
+fit points m params = do
+    packing <- sequence params
+    let unpackParams = unpack packing
+    FM $ tell [Curve points (model m . unpackParams)]
+    return $ unpackParams
 
-data ParamDesc a = PD { _paramDescription  :: String
-                      , _paramUnit         :: String
-                      }
-                 deriving (Show)
-makeLenses ''ParamDesc
-
-newtype Model param a = Model { model :: param a -> a -> a }
+-- | Run a model definition
+runFitM :: VS.Storable s
+        => FitM s a -> ([Curve s], Packed VS.Vector s, a)
+runFitM (FM action) =
+    case runRWS action () (map ParamIdx [0..], VS.empty) of
+      (r, (_, p0), curves) -> (curves, Packed p0, r)
 
 opModel :: RealFloat a
         => (a -> a -> a) -> Model l a -> Model r a -> Model (Product l r) a

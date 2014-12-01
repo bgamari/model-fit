@@ -39,21 +39,21 @@ reducedChiSquared :: (V.Storable a, Fractional a, Foldable p)
 reducedChiSquared pts m p =
     chiSquared (V.toList pts) m p / realToFrac (degreesOfFreedom pts p)
 
-leastSquares :: (Traversable p, V.Storable a, RealFloat a, LevMarable a)
-             => p (Param a) -> [(V.Vector (Point a), Model p a)] -> Packed V.Vector p a
-             -> Either LevMarError (Packed V.Vector p a)
-leastSquares packing curves p0 =
+leastSquares :: (V.Storable a, RealFloat a, LevMarable a)
+             => [Curve a] -> Packed V.Vector a
+             -> Either LevMarError (Packed V.Vector a)
+leastSquares curves p0 =
     case levmar objective Nothing (p0 ^. _Wrapped) ys 5000 defaultOpts mempty of
       Left e -> Left e
       Right (p, _, _) -> Right $ Packed p
   where
-    ys = V.concat $ map (V.map (const 0) . fst) curves
+    ys = V.concat $ map (V.map (const 0) . curvePoints) curves
     objective packed = V.concat $ map doCurve curves
       where
         -- We first evaluate this to avoid repeating model evaluation if possible
-        doCurve (pts, Model m) = V.map (\(Point x y e) -> (mp x - y) / sqrt e) pts
+        doCurve (Curve pts m) = V.map (\(Point x y e) -> (mp x - y) / sqrt e) pts
           where
-            mp = m $ unpack packing (Packed packed)
+            mp = m (Packed packed)
 
 residual :: Num a => Point a -> (a -> a) -> a
 residual pt f = pt^._y - f (pt^._x)

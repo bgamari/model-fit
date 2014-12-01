@@ -92,12 +92,13 @@ fcs = FitConfig
                           & mapped . ptX %~ (*1e6)
                           & V.filter (views ptX (>1))
     , fitModel = diff3DModel
-    , defaultParams = sequence
-          $ Diff3DP { _diffTime      = param 10
-                    , _diffExponent  = fixed 1
-                    , _aspectRatio   = param 10
-                    , _concentration = param 1
-                    }
+    , defaultParams = \pts->
+          fit pts diff3DModel $ sequence
+            $ Diff3DP { _diffTime      = param 10
+                      , _diffExponent  = fixed 1
+                      , _aspectRatio   = param 10
+                      , _concentration = param 1
+                      }
     }
 
 lifetime :: FitConfig
@@ -106,11 +107,11 @@ lifetime = FitConfig
                   . (layout_x_axis . laxis_title .~ "tau (seconds)")
                   . (layout_y_axis . laxis_title .~ "counts")
     , prepareObs = id
-    , fitModel = lifetimeModel
-    , defaultParams = sequence
-          $ LifetimeP { _decayTime = param 10
-                      , _amplitude = param 1
-                      }
+    , defaultParams = \pts ->
+          fit pts lifetimeModel $ sequence
+            $ LifetimeP { _decayTime = param 10
+                        , _amplitude = param 1
+                        }
     }
 
 --path = "/home/ben/lori/data/sheema/2013-07-16/2013-07-16-run_001.timetag.acorr-0"
@@ -123,7 +124,7 @@ main' = runEitherT $ do
     points' <- readPoints path
     let points = VS.convert $ prepareObs mc points'
 
-    let (packing, p0) = runParamsM params
+    let (packing, p0) = runFitM $ params points
         Right fit = leastSquares packing [(points, m)] p0
 
     let xs = [10**i | i <- [0, 0.01 .. 6]]
