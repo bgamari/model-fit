@@ -12,13 +12,12 @@ import Fit
 import Models.Fcs
 
 sources pts = runFitM $ do
-    diff1 <- param 2.3
-    diff2 <- param 3.2
-    aspect <- param 10
-    fit pts (opModel (*) diff3DModel diff3DModel) $
-      let a = Diff3DP (pure diff1) (fixed 1) (pure aspect) (param 1)
-          b = Diff3DP (pure diff2) (fixed 1) (pure aspect) (param 1)
-      in Pair a b
+    diff1 <- globalParam 2.3
+    diff2 <- globalParam 3.2
+    aspect <- globalParam 10
+    let a = Diff3DP <$> pure diff1 <*> fixed 1 <*> pure aspect <*> param 1
+        b = Diff3DP <$> pure diff2 <*> fixed 1 <*> pure aspect <*> param 1
+    fit pts $ (*) <$> fmap diff3DModel a <*> fmap diff3DModel b
 
 main = do
     let genParams1 = defaultParams & (diffTime      .~ 10)

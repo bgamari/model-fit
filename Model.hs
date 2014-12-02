@@ -2,6 +2,8 @@
 {-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE DeriveFunctor #-}
+{-# LANGUAGE DeriveFoldable #-}
 {-# LANGUAGE DeriveTraversable #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE FlexibleInstances #-}
@@ -16,8 +18,7 @@ module Model ( -- * Data samples
              , ParamIdx (..)
              , Param (..)
              , Packed (..)
-             , unpack
-             , embedParams
+             , packed
                -- * Building parameter topologies
              , FitM
              , runFitM
@@ -33,8 +34,10 @@ module Model ( -- * Data samples
 import Prelude hiding (sequence, foldl, mapM, product)
 import Data.Monoid (Monoid (..))
 import Control.Applicative
-import Control.Monad.RWS (RWS, runRWS, tell)
-import Control.Monad.State (State, evalState, get, put)
+import Control.Monad.Writer (WriterT, runWriterT, tell)
+import Control.Monad.State (StateT, State, state, evalState, get, put)
+import Control.Monad.Trans.Free
+import Control.Monad.Trans.Class (lift)
 import Data.Maybe
 import Data.Foldable as F
 import Data.Traversable
@@ -60,88 +63,71 @@ newtype Model param a = Model { model :: param a -> a -> a }
 newtype ParamIdx = ParamIdx Int
                  deriving (Show, Eq, Ord)
 
-data Param a = Param ParamIdx
-             | Fixed a
+data Param a = Param ParamIdx a
+             deriving (Functor, Foldable, Traversable, Show)
 
 -- | A packed representation of a subset
 data Packed v a = Packed (v a)
                 deriving (Show)
 makeWrapped ''Packed
 
--- | The information necessary to compute a model over a curve            
+-- | A @Lens@ onto the value of the given parameter in the @Packed@ representation
+packed :: VG.Vector v a => Param a -> Lens' (Packed v a) a
+packed (Param (ParamIdx i) _) = singular $ unwrap . vectorIx i
+  where
+    unwrap = lens (\(Packed v)->v) (\_ v->Packed v)
+
+-- | The information necessary to compute a model over a curve
 data Curve a = forall f. Curve { curvePoints :: VS.Vector (Point a)
                                , curveModel  :: Packed VS.Vector a -> a -> a
                                }
 
-newtype FitM s a = FM (RWS () [Curve s] ([ParamIdx], VS.Vector s) a)
-                 deriving (Functor, Applicative, Monad)
+newtype FitExpr s a = FE (FreeT Param (State [ParamIdx]) a)
+                    deriving (Functor, Applicative, Monad)
 
-popParamIdx :: FitM s ParamIdx
-popParamIdx = FM $ do 
-    idx <- use $ singular $ _1 . _head 
-    _1 %= tail
-    return idx
+popHead :: Monad m => StateT [s] m s
+popHead = do
+    x <- use $ singular _head
+    id %= tail
+    return x
 
-param :: VS.Storable a => a -> FitM a (Param a)
-param initial = do
-    idx <- popParamIdx
-    FM $ _2 %= (`VG.snoc` initial)
-    return $ Param idx
+param :: VS.Storable a => a -> FitExpr a a
+param initial = FE $ do
+    idx <- lift popHead
+    liftF $ Param idx initial
 
-fixed :: a -> FitM s (Param a)
-fixed = pure . Fixed
+fixed :: a -> FitExpr s a
+fixed = pure
 
-embedParams :: (VG.Vector v a, Traversable f)
-            => f (Param a) -> (forall b. Lens' (f b) b) -> Lens' (Packed v a) a
-embedParams idx l = singular $ _Wrapped' . vectorIx (mapping ^. l)
-  where
-    mapping = indexes idx
+-- The State Monad is to accommodate explicit sharing
+newtype GlobalFitM s a = GFM (WriterT [Curve s] (State [ParamIdx]) a)
+                       deriving (Functor, Applicative, Monad)
 
-indexes :: (Traversable f) => f (Param a) -> f Int
-indexes idx = evalState (mapM go idx) ([0..], M.empty)
-  where
-    go (Fixed x) = error "indexes: oh no"
-    go (Param x) = do
-      (next:rest, table) <- get
-      case M.lookup x table of
-        Just y -> return y
-        Nothing -> do put $! (rest, M.insert x next table)
-                      return next
+globalParam :: s -> GlobalFitM s (Param s)
+globalParam initial = GFM $ do
+    idx <- lift popHead
+    return $ Param idx initial
 
-unpack :: (VG.Vector v a, Traversable f)
-       => f (Param a) -> Packed v a -> f a
-unpack idx packed = evalState (mapM go idx) ([0..], M.empty)
-  where
-    go (Fixed x) = return x
-    go (Param x) = do
-      (next:rest, table) <- get
-      i <- case M.lookup x table of
-              Just i -> return i
-              Nothing -> do put $! (rest, M.insert x next table)
-                            return next
-      return (packed ^. _Wrapped . to (VG.! i))
-{-# INLINABLE unpack #-}
-
--- | Fit a curve against a model, returning a function unpacking the
+-- | Add a curve to the fit, returning a function unpacking the
 -- model parameters
-fit :: (VS.Storable a, Traversable f)
-    => VS.Vector (Point a)       -- ^ Observed points
-    -> Model f a                -- ^ The model
-    -> f (FitM a (Param a))     -- ^ The model parameters
-    -> FitM a (Packed VS.Vector a -> f a)
-fit points m params = do
-    packing <- sequence params
-    let unpackParams = unpack packing
-    FM $ tell [Curve points (model m . unpackParams)]
-    return $ unpackParams
+fit :: (VS.Storable a)
+    => VS.Vector (Point a)      -- ^ Observed points
+    -> FitExpr a (a -> a)       -- ^ The model
+    -> GlobalFitM a ()
+fit points (FE m) = do
+    m' <- GFM $ lift $ runFreeT m
+    let runModel p = iter (\i->p ^. packed i) $ free m'
+    GFM $ tell [Curve points runModel]
 
 -- | Run a model definition
-runFitM :: VS.Storable s
-        => FitM s a -> ([Curve s], Packed VS.Vector s, a)
-runFitM (FM action) =
-    case runRWS action () (map ParamIdx [0..], VS.empty) of
-      (r, (_, p0), curves) -> (curves, Packed p0, r)
+runGlobalFitM :: VS.Storable s
+              => GlobalFitM s a
+              -> ([Curve s], VS.Vector s, a)
+runGlobalFitM (GFM action) = undefined
+    --case evalState (runWriterT action) (map ParamIdx [0..]) of
+      --(r, curves) -> (curves, r)
 
+    
 opModel :: RealFloat a
         => (a -> a -> a) -> Model l a -> Model r a -> Model (Product l r) a
 opModel op (Model a) (Model b) =
