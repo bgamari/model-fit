@@ -16,7 +16,6 @@ module Model ( -- * Data samples
                Point (Point)
              , ptX, ptY, ptVar
                -- * Packing parameters
-             , ParamIdx (..)
              , Packed (..)
              , packed
                -- * Building individual fits
@@ -69,7 +68,7 @@ newtype Model param a = Model { model :: param a -> a -> a }
 newtype ParamIdx = ParamIdx Int
                  deriving (Show, Eq, Ord)
 
--- | A packed representation of a subset
+-- | A packed parameter vector
 data Packed v a = Packed (v a)
                 deriving (Show)
 makeWrapped ''Packed
@@ -88,10 +87,11 @@ data Curve a = forall f. Curve { curvePoints :: VS.Vector (Point a)
 newtype FitExprM s a = FEM (Compose (State [ParamIdx]) (FitExpr s) a)
                      deriving (Functor, Applicative)
 
+-- | A fit expression
 data FitExpr s a where
     Param :: ParamIdx -> s -> FitExpr s s
     Pure  :: a -> FitExpr s a
-    ApT   :: FitExpr s (a -> b) -> FitExpr s a -> FitExpr s b
+    ApT   :: FitExpr s (a -> b) -> FitExpr s a -> FitExpr s b -- TODO: remove
     Bind  :: FitExpr s a -> (a -> FitExpr s b) -> FitExpr s b
 
 instance Functor (FitExpr s) where
@@ -103,7 +103,6 @@ instance Functor (FitExpr s) where
 instance Applicative (FitExpr s) where
   pure = Pure
   f <*> x = ApT f x
-  --f <*> x = Bind x (\a -> fmap ($ a) f)
 
 instance Monad (FitExpr s) where
   return = Pure
@@ -115,25 +114,29 @@ popHead = do
     id %= tail
     return x
 
+-- | Create a parameter to be optimized over (given an initial value)
 param :: VS.Storable a => a -> FitExprM a a
 param initial = FEM $ Compose $ do
     idx <- popHead
     return $ Param idx initial
 
+-- | Lift a pure value into a fit expression
 fixed :: a -> FitExprM s a
 fixed = pure
 
+-- | Layout the parameters of the given expression
 expr :: FitExprM s a -> GlobalFitM s (FitExpr s a)
 expr (FEM m) = do
     GFM $ lift $ getCompose m
 
+-- | Hoist an expression into a @FitExprM@
 hoist :: FitExpr s a -> FitExprM s a
 hoist = FEM . Compose . pure
 
--- The State Monad is to accommodate explicit sharing
 newtype GlobalFitM s a = GFM (WriterT [Curve s] (State [ParamIdx]) a)
                        deriving (Functor, Applicative, Monad)
 
+-- | Create a global parameter
 globalParam :: s -> GlobalFitM s (FitExprM s s)
 globalParam initial = GFM $ do
     idx <- lift popHead
@@ -149,12 +152,14 @@ fit points (FEM m) = do
     m' <- GFM $ lift $ getCompose m
     GFM $ tell [Curve points m']
 
+-- | Evaluate the fit expression given the initial values
 evalDefault :: FitExpr s a -> a
 evalDefault (Pure a) = a
 evalDefault (Param _ a) = a
 evalDefault (ApT f a) = (evalDefault f) (evalDefault a)
 evalDefault (Bind a f) = evalDefault $ f (evalDefault a)
 
+-- | Evaluate the fit expression given a parameter vector
 evalParam :: VS.Storable s => FitExpr s a -> Packed VS.Vector s -> a
 evalParam (Pure a) _ = a
 evalParam (Param (ParamIdx i) _) (Packed v) = v VS.! i
