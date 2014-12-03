@@ -53,7 +53,7 @@ leastSquares curves p0 =
         -- We first evaluate this to avoid repeating model evaluation if possible
         doCurve (Curve pts m) = V.map (\(Point x y e) -> (mp x - y) / sqrt e) pts
           where
-            mp = m (Packed packed)
+            mp = evalParam m (Packed packed)
 
 residual :: Num a => Point a -> (a -> a) -> a
 residual pt f = pt^._y - f (pt^._x)
