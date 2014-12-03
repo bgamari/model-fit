@@ -24,6 +24,9 @@ module Model ( -- * Data samples
              , param, fixed
              , fit
              , evalParam, evalDefault
+             , FitDesc (..)
+             , fitEval
+             , freeParams
                -- * Building global fits
              , GlobalFitM
              , globalParam
@@ -31,9 +34,8 @@ module Model ( -- * Data samples
              , runGlobalFitM
              , Curve(..)
                -- * Models
-             , Model (..)
-             , opModel, sumModel
-             , constModel
+             , Model
+             , liftOp
              ) where
 
 import Prelude hiding (sequence, foldl, mapM, product)
@@ -63,7 +65,7 @@ vectorIx i f v
   | 0 <= i && i < VG.length v = f (v VG.! i) <&> \a -> v VG.// [(i, a)]
   | otherwise                 = pure v
 
-newtype Model param a = Model { model :: param a -> a -> a }
+type Model param a = param a -> a -> a
 
 newtype ParamIdx = ParamIdx Int
                  deriving (Show, Eq, Ord)
@@ -142,15 +144,23 @@ globalParam initial = GFM $ do
     idx <- lift popHead
     return $ FEM $ Compose $ return $ Param idx initial
 
+data FitDesc a = FitDesc { fitModel  :: FitExpr a (a -> a)
+                         , fitPoints :: VS.Vector (Point a)
+                         }
+
+fitEval :: VS.Storable a => FitDesc a -> Packed VS.Vector a -> a -> a
+fitEval fd packed = evalParam (fitModel fd) packed
+
 -- | Add a curve to the fit, returning a function unpacking the
 -- model parameters
 fit :: (VS.Storable a)
-    => VS.Vector (Point a)      -- ^ Observed points
+    => VS.Vector (Point a)       -- ^ Observed points
     -> FitExprM a (a -> a)       -- ^ The model
-    -> GlobalFitM a ()
+    -> GlobalFitM a (FitDesc a)
 fit points (FEM m) = do
     m' <- GFM $ lift $ getCompose m
     GFM $ tell [Curve points m']
+    return $ FitDesc { fitModel = m', fitPoints = points }
 
 -- | Evaluate the fit expression given the initial values
 evalDefault :: FitExpr s a -> a
@@ -166,6 +176,10 @@ evalParam (Param (ParamIdx i) _) (Packed v) = v VS.! i
 evalParam (ApT f a) v = (evalParam f v) (evalParam a v)
 evalParam (Bind a f) v = evalParam (f (evalParam a v)) v
 
+-- | Count the number of fitted parameters
+freeParams :: FitExpr s a -> Int
+freeParams = M.size . packParams'
+
 packParams' :: FitExpr s a -> M.Map ParamIdx s
 packParams' ps = go ps M.empty
   where
@@ -178,7 +192,7 @@ packParams' ps = go ps M.empty
 packParams :: (VS.Storable s, Num s) => FitExpr s a -> VS.Vector s
 packParams = go . packParams'
   where
-    go m = foldl' (\s (ParamIdx i, x)->s & ix i .~ x) (VS.replicate (n+1) 0) (M.assocs m)
+    go m = VS.generate (n+1) (\i->m M.! ParamIdx i)
       where
         (ParamIdx n,_) = M.findMax m
 
@@ -191,18 +205,5 @@ runGlobalFitM (GFM action) = do
       (r, curves) -> let p0 = packParams $ traverse curveExpr curves
                      in (curves, Packed p0, r)
 
-opModel :: RealFloat a
-        => (a -> a -> a) -> Model l a -> Model r a -> Model (Product l r) a
-opModel op (Model a) (Model b) =
-    Model $ \(Pair pa pb) -> let a' = a pa
-                                 b' = b pb
-                             in \x -> a' x `op` b' x
-{-# INLINEABLE opModel #-}
-
-sumModel :: RealFloat y => Model a y -> Model b y -> Model (Product a b) y
-sumModel = opModel (+)
-{-# INLINEABLE sumModel #-}
-
-constModel :: Model Identity a
-constModel = Model $ \(Identity p) _ -> p
-{-# INLINEABLE constModel #-}
+liftOp :: (a -> a -> a) -> (b -> a) -> (b -> a) -> (b -> a)
+liftOp op f g = \x -> f x `op` g x

@@ -46,7 +46,7 @@ instance Show1 LifetimeParams where
         "(Lifetime "++show decay++" "++show amp++")"++a
 
 lifetimeModel :: RealFloat a => Model LifetimeParams a
-lifetimeModel = Model $ \(LifetimeP taud amp) tau -> amp * exp (-tau / taud)
+lifetimeModel = \(LifetimeP taud amp) tau -> amp * exp (-tau / taud)
 {-# INLINE lifetimeModel #-}
 
 data Irf a = Irf { irfSamples :: !(VS.Vector a)
@@ -82,19 +82,18 @@ type Time = Double
 -- | @convolvedModel irf nbins jiffy decay@ is a model described by
 -- @decay$ convolved with @irf@. The model is valid over @x@ from
 -- 0 to @jiffy * nbins@
-convolvedModel :: Irf Double -> Int -> Time -> Model p Double -> Model p Double
-convolvedModel irf nbins jiffy decay = Model f
+convolvedModel :: Irf Double -> Int -> Time -> (Double -> Double) -> (Double -> Double)
+convolvedModel irf nbins jiffy decayModel = f
   where
     --paddedLength = nbins + VS.length (irfSamples irf) - 1
     paddedLength = nbins
     paddedIrf = padTo paddedLength 0 (irfSamples irf)
 
-    f p = \x -> convolved VS.! round (x / jiffy)
+    f x = convolved VS.! round (x / jiffy)
       where
         convolved = convolve paddedIrf (padTo paddedLength 0 m)
-        m = let mp = model decay p
-                bins = VS.enumFromTo 0 nbins :: VS.Vector Int
-            in VS.map (\n->mp (realToFrac n * jiffy)) bins
+        m = let bins = VS.enumFromTo 0 nbins :: VS.Vector Int
+            in VS.map (\n->decayModel (realToFrac n * jiffy)) bins
 {-# INLINEABLE convolvedModel #-}
 
 padTo :: VS.Storable a => Int -> a -> VS.Vector a -> VS.Vector a

@@ -29,7 +29,7 @@ import Data.Default
 
 import CsvUtils
 import Fit
-import Model
+import Model hiding (Curve)
 import Models.Fcs hiding (defaultParams)
 import Models.Lifetime
 
@@ -70,17 +70,17 @@ plotModel :: RealFloat a
           -> [a]
           -> PlotLines a a
 plotModel m p xs =
-    def & plot_lines_values .~ [map (\x->(x, model m p x)) xs]
+    def & plot_lines_values .~ [map (\x->(x, m p x)) xs]
 
 toErrPoint :: Num a => Point a -> ErrPoint a a
 toErrPoint (Point x y e) =
     ErrPoint (ErrValue x x x) (ErrValue (y-e) y (y+e))
 
-data FitConfig = forall params. (Traversable params, Show (params Double)) => FitConfig
+data FitConfig = forall param. FitConfig
     { setupLayout   :: Layout Double Double -> Layout Double Double
     , prepareObs    :: V.Vector (Point Double) -> V.Vector (Point Double)
-    , fitModel      :: Model params Double
-    , defaultParams :: ParamsM Double (params (Param Double))
+    , buildModel    :: VS.Vector (Point Double) -> GlobalFitM Double (param, FitDesc Double)
+    , showParams    :: Packed VS.Vector Double -> param -> String
     }
 
 fcs :: FitConfig
@@ -91,14 +91,16 @@ fcs = FitConfig
     , prepareObs = \v-> v & mapped . ptY %~ subtract 1
                           & mapped . ptX %~ (*1e6)
                           & V.filter (views ptX (>1))
-    , fitModel = diff3DModel
-    , defaultParams = \pts->
-          fit pts diff3DModel $ sequence
-            $ Diff3DP { _diffTime      = param 10
-                      , _diffExponent  = fixed 1
-                      , _aspectRatio   = param 10
-                      , _concentration = param 1
-                      }
+    , buildModel = \pts->do
+          p <- expr $ sequenceA
+               $ Diff3DP { _diffTime      = param 10
+                         , _diffExponent  = fixed 1
+                         , _aspectRatio   = param 10
+                         , _concentration = param 1
+                         }
+          fd <- fit pts $ diff3DModel <$> hoist p
+          return (p, fd)
+    , showParams = \packed p -> show $ evalParam p packed
     }
 
 lifetime :: FitConfig
@@ -107,11 +109,12 @@ lifetime = FitConfig
                   . (layout_x_axis . laxis_title .~ "tau (seconds)")
                   . (layout_y_axis . laxis_title .~ "counts")
     , prepareObs = id
-    , defaultParams = \pts ->
-          fit pts lifetimeModel $ sequence
-            $ LifetimeP { _decayTime = param 10
-                        , _amplitude = param 1
-                        }
+    , buildModel = \pts -> do
+          p <- expr $ sequenceA
+               $ LifetimeP { _decayTime = param 10, _amplitude = param 1 }
+          fd <- fit pts $ lifetimeModel <$> hoist p
+          return (p, fd)
+    , showParams = \packed p -> show $ evalParam p packed
     }
 
 --path = "/home/ben/lori/data/sheema/2013-07-16/2013-07-16-run_001.timetag.acorr-0"
@@ -120,21 +123,22 @@ path = "hello"
 main = main' >>= print
 main' = runEitherT $ do
     let mc = fcs
-    FitConfig {fitModel=m, defaultParams=params} <- return mc
+    FitConfig { buildModel=fm, showParams=showParams} <- return mc
     points' <- readPoints path
     let points = VS.convert $ prepareObs mc points'
 
-    let (packing, p0) = runFitM $ params points
-        Right fit = leastSquares packing [(points, m)] p0
+    let (curves, p0, (params, fd)) = runGlobalFitM (fm points)
+        Right fit = leastSquares curves p0
 
     let xs = [10**i | i <- [0, 0.01 .. 6]]
     liftIO $ renderableToFile def "hi.png"
            $ toRenderable
-           $ layout_plots .~ [ toPlot $ plotCurve $ Curve points "hi"
-                             , toPlot $ plotModel m (unpack packing fit) xs]
+           $ layout_plots .~ [ toPlot $ plotCurve $ Curve points "hi" ]
+                             -- , toPlot $ plotModel fm (evalParam params fit) xs]
            $ setupLayout mc
            $ def
 
-    liftIO $ print (chiSquared (VS.toList points) m (unpack packing fit), unpack packing fit)
-    liftIO $ print (reducedChiSquared points m (unpack packing fit))
+    --liftIO $ print (evalParam params fit)
+    liftIO $ print (chiSquared fd fit)
+    liftIO $ print (reducedChiSquared fd fit)
     return ()
