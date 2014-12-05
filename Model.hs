@@ -192,8 +192,11 @@ packParams' ps = go ps M.empty
 packParams :: (VS.Storable s, Num s) => FitExpr s a -> VS.Vector s
 packParams = go . packParams'
   where
-    go m = VS.generate (n+1) (\i->m M.! ParamIdx i)
+    go m = VS.generate (n+1) pack
       where
+        pack i = case M.lookup (ParamIdx i) m of
+                     Just v  -> v
+                     Nothing -> error $ "Couldn't find ParamIdx "++show i
         (ParamIdx n,_) = M.findMax m
 
 -- | Run a model definition

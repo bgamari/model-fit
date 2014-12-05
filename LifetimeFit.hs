@@ -9,6 +9,9 @@ import Options.Applicative
 import Data.Functor.Product
 import Data.Functor.Identity
 
+import qualified Data.Map as M
+import Control.Monad.Writer
+
 import Linear
 import Control.Lens hiding (argument)
 
@@ -39,6 +42,13 @@ jiffy = 8 :: Double
 
 dropLast n v = V.take (V.length v - n) v
 
+namedGlobalParam :: String -> a
+                 -> WriterT (M.Map String (FitExpr a a)) (GlobalFitM a) (FitExprM a a)
+namedGlobalParam name initial = do
+    p <- lift $ globalParam initial >>= expr
+    tell $ M.singleton name p
+    return $ hoist p
+
 main = printing $ do
     args <- liftIO $ execParser $ info (helper <*> opts) (fullDesc <> progDesc "Fit fluorescence decays")
     let withPoissonVar = withVar id
@@ -54,19 +64,22 @@ main = printing $ do
     let fluorBg = V.head fluorPts ^. _y
         Just fluorAmp = maximumOf (each . _y) fluorPts
         fitPts = V.convert $ V.take period fluorPts
-    let (curves, p0, fd) = runGlobalFitM $ do
-          let component :: Double -> FitExprM Double (Double -> Double)
+    let (curves, p0, (fd, params)) = runGlobalFitM $ runWriterT $ do
+          tau1 <- namedGlobalParam "tau1" 2000
+          --tau2 <- namedGlobalParam "tau2" 4000
+          let component :: FitExprM Double Double -> FitExprM Double (Double -> Double)
               component tau = lifetimeModel <$> p
-                where p = sequenceA $ LifetimeP { _decayTime = param tau
+                where p = sequenceA $ LifetimeP { _decayTime = tau
                                                 , _amplitude = param $ fluorAmp / 2
                                                 }
-          --decayModel <- expr $ liftOp (+) <$> component 2000 <*> component 4000
-          decayModel <- expr $ component 2000
-          background <- expr $ (\p _ -> p) <$> param fluorBg
-          convolved <- expr $ convolvedModel irf (periods*period) jiffy <$> hoist decayModel
-          m <- expr $ liftOp (+) <$> hoist convolved <*> hoist background
+          --decayModel <- lift $ expr $ liftOp (+) <$> component tau1 <*> component tau2
+          decayModel <- lift $ expr $ component tau1
+          --background <- lift $ expr $ (\p _ -> p) <$> param fluorBg
+          let background = return $ const 0
+          convolved <- lift $ expr $ convolvedModel irf (periods*period) jiffy <$> hoist decayModel
+          m <- lift $ expr $ liftOp (+) <$> hoist convolved <*> hoist background
           --let m = convolved
-          fit fitPts $ hoist m
+          lift $ fit fitPts $ hoist m
 
     let Right fit = leastSquares curves p0
     --let fit = p0
@@ -76,7 +89,7 @@ main = printing $ do
                              in map (\t->(t, f t)) ts
                            , zip [jiffy*i | i <- [0..]] (toListOf (each . _y) fluorPts)
                            ]
-    --liftIO $ print $ unpack packing p0
+    liftIO $ print $ fmap (flip evalParam fit) params
     liftIO $ print period
     liftIO $ putStrLn $ "Reduced Chi squared: "++show (reducedChiSquared fd fit)
 
