@@ -12,31 +12,32 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE ExistentialQuantification #-}
 
-module Model ( -- * Data samples
-               Point (Point)
-             , ptX, ptY, ptVar
-               -- * Packing parameters
-             , Packed (..)
-             , packed
-               -- * Building individual fits
-             , FitExpr
-             , FitExprM
-             , param, fixed
-             , fit
-             , evalParam, evalDefault
-             , FitDesc (..)
-             , fitEval
-             , freeParams
-               -- * Building global fits
-             , GlobalFitM
-             , globalParam
-             , expr, hoist
-             , runGlobalFitM
-             , Curve(..)
-               -- * Models
-             , Model
-             , liftOp
-             ) where
+module ModelFit.Model
+    ( -- * Data samples
+      Point (Point)
+    , ptX, ptY, ptVar
+      -- * Packing parameters
+    , Packed (..)
+    , packed
+      -- * Building individual fits
+    , FitExpr
+    , FitExprM
+    , param, fixed
+    , fit
+    , evalParam, evalDefault
+    , FitDesc (..)
+    , fitEval
+    , freeParams
+      -- * Building global fits
+    , GlobalFitM
+    , globalParam
+    , expr, hoist
+    , runGlobalFitM
+    , Curve(..)
+      -- * Models
+    , Model
+    , liftOp
+    ) where
 
 import Prelude hiding (sequence, foldl, mapM, product)
 import Data.Monoid (Monoid (..))
@@ -58,7 +59,7 @@ import qualified Data.Vector.Generic as VG
 import qualified Data.Vector.Storable as VS
 import qualified Data.Map as M
 
-import Types
+import ModelFit.Types
 
 vectorIx :: VG.Vector v a => Int -> Traversal' (v a) a
 vectorIx i f v

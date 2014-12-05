@@ -4,7 +4,7 @@
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE TemplateHaskell #-}
 
-module Models.Fcs
+module ModelFit.Models.Fcs
     ( Diff3DParams(..)
     , diffTime
     , diffExponent
@@ -14,7 +14,6 @@ module Models.Fcs
     , defaultParams
     ) where
 
-import Model
 import Linear
 import Control.Lens
 import Data.Foldable
@@ -24,6 +23,7 @@ import Data.Distributive.Generic
 import Data.Functor.Rep
 import GHC.Generics (Generic1)
 import Data.Functor.Classes
+import ModelFit.Model
 
 data Diff3DParams a = Diff3DP { _diffTime       :: !a
                               , _diffExponent   :: !a

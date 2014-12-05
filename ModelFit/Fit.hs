@@ -3,7 +3,7 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE FlexibleContexts #-}
 
-module Fit where
+module ModelFit.Fit where
 
 import Data.Functor.Identity
 import Data.Foldable as F
@@ -16,7 +16,7 @@ import qualified Data.Vector.Storable as VS
 
 import Linear
 import Numeric.LevMar hiding (Model)
-import Model
+import ModelFit.Model
 
 degreesOfFreedom :: (VS.Storable a)
                  => FitDesc a -> Int

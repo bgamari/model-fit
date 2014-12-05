@@ -23,11 +23,12 @@ import Data.Default
 import Data.Colour
 import Data.Colour.Names
 
-import Types (withVar)
+import ModelFit.Model
+import ModelFit.Types (withVar)
+import ModelFit.Fit
+import ModelFit.Models.Lifetime
+
 import CsvUtils
-import Model
-import Fit
-import Models.Lifetime
 
 data Opts = Opts { irfPath    :: FilePath
                  , fluorPath  :: FilePath

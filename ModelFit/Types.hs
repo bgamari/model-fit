@@ -2,7 +2,13 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE RankNTypes #-}
 
-module Types where
+module ModelFit.Types
+    ( -- * Sample points
+      Point (Point)
+    , ptX, ptY, ptVar
+    , pointV3
+    , withVar
+    ) where
 
 import Control.Applicative
 import Control.Monad (mzero)

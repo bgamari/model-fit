@@ -7,9 +7,9 @@ import Data.Functor.Product
 import Linear
 import Control.Lens
 
-import Model       
-import Fit
-import Models.Fcs
+import ModelFit.Model
+import ModelFit.Fit
+import ModelFit.Models.Fcs
 
 sources pts = runGlobalFitM $ do
     diff1 <- globalParam 2.3 :: GlobalFitM Double (FitExprM Double Double)

@@ -28,10 +28,10 @@ import Graphics.Rendering.Chart.Backend.Cairo
 import Data.Default
 
 import CsvUtils
-import Fit
-import Model hiding (Curve)
-import Models.Fcs hiding (defaultParams)
-import Models.Lifetime
+import ModelFit.Fit
+import ModelFit.Model hiding (Curve)
+import ModelFit.Models.Fcs hiding (defaultParams)
+import ModelFit.Models.Lifetime
 
 data Curve = Curve { _cPoints :: VS.Vector (Point Double)
                    , _cName   :: String

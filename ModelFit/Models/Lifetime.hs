@@ -4,7 +4,7 @@
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE TemplateHaskell #-}
 
-module Models.Lifetime
+module ModelFit.Models.Lifetime
     ( -- * Exponential decay
       LifetimeParams (..)
     , decayTime
@@ -19,7 +19,6 @@ module Models.Lifetime
     , convolvedModel
     ) where
 
-import Model
 import Control.Lens
 import Data.Foldable
 import Data.Traversable
@@ -32,6 +31,7 @@ import qualified Data.Vector.Storable as VS
 import Data.Complex
 
 import Numeric.FFT.Vector.Invertible
+import ModelFit.Model
 
 data  LifetimeParams a = LifetimeP { _decayTime :: !a
                                    , _amplitude :: !a
