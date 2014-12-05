@@ -1,7 +1,9 @@
-import Prelude hiding (sequence)
+import Prelude hiding (sequence, mapM, foldl)
 import Data.Traversable
+import Data.Foldable
 import Control.Monad (void)
 import Control.Monad.Trans.Either
+import Control.Monad.Trans.Class
 import Control.Monad.IO.Class
 import qualified Data.Vector as V
 import qualified Data.Vector.Storable as VS
@@ -10,7 +12,7 @@ import Data.Functor.Product
 import Data.Functor.Identity
 
 import qualified Data.Map as M
-import Control.Monad.Writer
+import Control.Monad.Writer (WriterT, runWriterT, tell)
 
 import Linear
 import Control.Lens hiding (argument)
@@ -27,13 +29,15 @@ import Model
 import Fit
 import Models.Lifetime
 
-data Opts = Opts { irfPath   :: FilePath
-                 , fluorPath :: FilePath
+data Opts = Opts { irfPath    :: FilePath
+                 , fluorPath  :: FilePath
+                 , components :: Int
                  }
 
 opts = Opts
     <$> strOption (long "irf" <> metavar "FILE" <> help "IRF curve path")
     <*> strArgument (metavar "FILE" <> help "Fluorescence curve path")
+    <*> option auto (long "irf" <> metavar "N" <> help "Number of components")
 
 printing :: EitherT String IO () -> IO ()
 printing action = runEitherT action >>= either print return
@@ -42,8 +46,9 @@ jiffy = 8 :: Double
 
 dropLast n v = V.take (V.length v - n) v
 
-namedGlobalParam :: String -> a
-                 -> WriterT (M.Map String (FitExpr a a)) (GlobalFitM a) (FitExprM a a)
+type NamedGlobalFitM s = WriterT (M.Map String (FitExpr s s)) (GlobalFitM s)
+
+namedGlobalParam :: String -> a -> NamedGlobalFitM a (FitExprM a a)
 namedGlobalParam name initial = do
     p <- lift $ globalParam initial >>= expr
     tell $ M.singleton name p
@@ -65,15 +70,13 @@ main = printing $ do
         Just fluorAmp = maximumOf (each . _y) fluorPts
         fitPts = V.convert $ V.take period fluorPts
     let (curves, p0, (fd, params)) = runGlobalFitM $ runWriterT $ do
-          tau1 <- namedGlobalParam "tau1" 2000
-          --tau2 <- namedGlobalParam "tau2" 4000
+          taus <- mapM (\i->namedGlobalParam ("tau"++show i) (realToFrac $ i*1000)) [1..components args]
           let component :: FitExprM Double Double -> FitExprM Double (Double -> Double)
               component tau = lifetimeModel <$> p
                 where p = sequenceA $ LifetimeP { _decayTime = tau
                                                 , _amplitude = param $ fluorAmp / 2
                                                 }
-          --decayModel <- lift $ expr $ liftOp (+) <$> component tau1 <*> component tau2
-          decayModel <- lift $ expr $ component tau1
+          decayModel <- lift $ expr $ foldl (\accum tau->liftOp (+) <$> accum <*> component tau) (pure $ const 0) taus
           --background <- lift $ expr $ (\p _ -> p) <$> param fluorBg
           let background = return $ const 0
           convolved <- lift $ expr $ convolvedModel irf (periods*period) jiffy <$> hoist decayModel
