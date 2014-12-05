@@ -5,10 +5,7 @@
 
 module ModelFit.Fit where
 
-import Data.Functor.Identity
 import Data.Foldable as F
-import Data.Traversable as T
-import Control.Applicative
 import Data.Monoid (Monoid (..), Sum (..))
 
 import Control.Lens

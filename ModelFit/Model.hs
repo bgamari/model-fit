@@ -40,20 +40,14 @@ module ModelFit.Model
     ) where
 
 import Prelude hiding (sequence, foldl, mapM, product)
-import Data.Monoid (Monoid (..))
 import Data.Functor.Compose
 import Control.Applicative
 import Control.Monad.Writer (WriterT, runWriterT, tell)
-import Control.Monad.State (StateT, State, state, evalState, get, put)
+import Control.Monad.State (StateT, State, evalState)
 import Control.Monad.Trans.Class (lift)
-import Data.Maybe
-import Data.Foldable as F
 import Data.Traversable
-import Data.Functor.Product
-import Data.Functor.Identity
 
 import Control.Lens
-import Linear
 
 import qualified Data.Vector.Generic as VG
 import qualified Data.Vector.Storable as VS
@@ -83,9 +77,9 @@ packed (ParamIdx i) = singular $ unwrap . vectorIx i
     unwrap = lens (\(Packed v)->v) (\_ v->Packed v)
 
 -- | The information necessary to compute a model over a curve
-data Curve a = forall f. Curve { curvePoints :: VS.Vector (Point a)
-                               , curveExpr   :: FitExpr a (a -> a)
-                               }
+data Curve a = Curve { curvePoints :: VS.Vector (Point a)
+                     , curveExpr   :: FitExpr a (a -> a)
+                     }
 
 newtype FitExprM s a = FEM (Compose (State [ParamIdx]) (FitExpr s) a)
                      deriving (Functor, Applicative)

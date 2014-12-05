@@ -13,6 +13,8 @@ build-type:          Simple
 cabal-version:       >=1.10
 
 library
+  ghc-options:         -Wall
+  default-language:    Haskell2010
   exposed-modules:     ModelFit.Fit
                        ModelFit.Types
                        ModelFit.Model
@@ -41,6 +43,7 @@ library
 
 executable hphoton-fcsfit
   main-is:             Main.hs
+  default-language:    Haskell2010
   other-extensions:    DeriveFunctor,
                        DeriveFoldable,
                        DeriveTraversable,
@@ -75,6 +78,7 @@ executable hphoton-fcsfit
 
 executable hphoton-fcsfit-web
   main-is:             Web.hs
+  default-language:    Haskell2010
   other-extensions:    DeriveFunctor,
                        DeriveFoldable,
                        DeriveTraversable,
@@ -112,6 +116,7 @@ executable hphoton-fcsfit-web
 
 executable hphoton-lifetime
   main-is:             LifetimeFit.hs
+  default-language:    Haskell2010
   other-extensions:    DeriveFunctor,
                        DeriveFoldable,
                        DeriveTraversable,
