@@ -47,7 +47,7 @@ jiffy = 8 :: Double
 
 dropLast n v = V.take (V.length v - n) v
 
-type NamedGlobalFitM s = WriterT (M.Map String (FitExpr s s)) (GlobalFitM s)
+type NamedGlobalFitM s = WriterT (M.Map String (FitExpr (ParamLoc s) s s)) (GlobalFitM s)
 
 namedGlobalParam :: String -> a -> NamedGlobalFitM a (FitExprM a a)
 namedGlobalParam name initial = do

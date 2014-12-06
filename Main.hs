@@ -7,8 +7,9 @@ import Data.Functor.Product
 import Linear
 import Control.Lens
 
-import ModelFit.Model
+import ModelFit.Types
 import ModelFit.Fit
+import ModelFit.Model
 import ModelFit.Models.Fcs
 
 sources pts = runGlobalFitM $ do

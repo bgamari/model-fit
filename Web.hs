@@ -28,6 +28,7 @@ import Graphics.Rendering.Chart.Backend.Cairo
 import Data.Default
 
 import CsvUtils
+import ModelFit.Types
 import ModelFit.Fit
 import ModelFit.Model hiding (Curve)
 import ModelFit.Models.Fcs hiding (defaultParams)

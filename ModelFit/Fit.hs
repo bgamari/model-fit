@@ -14,6 +14,7 @@ import qualified Data.Vector.Storable as VS
 import Linear
 import Numeric.LevMar hiding (Model)
 import ModelFit.Model
+import ModelFit.Types
 
 degreesOfFreedom :: (VS.Storable a)
                  => FitDesc a -> Int

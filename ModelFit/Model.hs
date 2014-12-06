@@ -13,20 +13,18 @@
 {-# LANGUAGE ExistentialQuantification #-}
 
 module ModelFit.Model
-    ( -- * Data samples
-      Point (Point)
-    , ptX, ptY, ptVar
-      -- * Packing parameters
-    , Packed (..)
+    ( -- * Packing parameters
+      Packed (..)
     , packed
+    , ParamLoc
       -- * Building individual fits
-    , FitExpr
     , FitExprM
+    , FitExpr
     , param, fixed
     , fit
-    , evalParam, evalDefault
     , FitDesc (..)
     , fitEval
+    , evalParam
     , freeParams
       -- * Building global fits
     , GlobalFitM
@@ -53,6 +51,7 @@ import qualified Data.Vector.Generic as VG
 import qualified Data.Vector.Storable as VS
 import qualified Data.Map as M
 
+import ModelFit.FitExpr
 import ModelFit.Types
 
 vectorIx :: VG.Vector v a => Int -> Traversal' (v a) a
@@ -70,64 +69,48 @@ data Packed v a = Packed (v a)
                 deriving (Show)
 makeWrapped ''Packed
 
--- | A @Lens@ onto the value of the given parameter in the @Packed@ representation
+-- | A 'Lens' onto the value of the given parameter in the 'Packed' representation
 packed :: VG.Vector v a => ParamIdx -> Lens' (Packed v a) a
 packed (ParamIdx i) = singular $ unwrap . vectorIx i
   where
     unwrap = lens (\(Packed v)->v) (\_ v->Packed v)
 
+-- | The location of a parameter and its initial value
+data ParamLoc a = ParamLoc ParamIdx a
+
 -- | The information necessary to compute a model over a curve
 data Curve a = Curve { curvePoints :: VS.Vector (Point a)
-                     , curveExpr   :: FitExpr a (a -> a)
+                     , curveExpr   :: FitExpr (ParamLoc a) a (a -> a)
                      }
 
-newtype FitExprM s a = FEM (Compose (State [ParamIdx]) (FitExpr s) a)
+-- | A monad for defining a fit expression, with the ability to introduce
+-- new parameters.
+newtype FitExprM p a = FEM (Compose (State [ParamIdx]) (FitExpr (ParamLoc p) p) a)
                      deriving (Functor, Applicative)
 
--- | A fit expression
-data FitExpr s a where
-    Param :: ParamIdx -> s -> FitExpr s s
-    Pure  :: a -> FitExpr s a
-    ApT   :: FitExpr s (a -> b) -> FitExpr s a -> FitExpr s b -- TODO: remove
-    Bind  :: FitExpr s a -> (a -> FitExpr s b) -> FitExpr s b
-
-instance Functor (FitExpr s) where
-  fmap f (Param n a) = ApT (pure f) (Param n a)
-  fmap f (Pure a) = Pure (f a)
-  fmap f (ApT g a) = ApT (ApT (Pure (f .)) g) a
-  fmap f (Bind a g) = Bind a (fmap f . g)
-
-instance Applicative (FitExpr s) where
-  pure = Pure
-  f <*> x = ApT f x
-
-instance Monad (FitExpr s) where
-  return = Pure
-  a >>= f = Bind a f
-
+-- | Pop the first element of the state
 popHead :: Monad m => StateT [s] m s
 popHead = do
     x <- use $ singular _head
     id %= tail
     return x
 
--- | Create a parameter to be optimized over (given an initial value)
+-- | Introduce a new parameter to be optimized over (given an initial value)
 param :: VS.Storable a => a -> FitExprM a a
 param initial = FEM $ Compose $ do
     idx <- popHead
-    return $ Param idx initial
+    return $ Param $ ParamLoc idx initial
 
 -- | Lift a pure value into a fit expression
-fixed :: a -> FitExprM s a
+fixed :: a -> FitExprM p a
 fixed = pure
 
 -- | Layout the parameters of the given expression
-expr :: FitExprM s a -> GlobalFitM s (FitExpr s a)
-expr (FEM m) = do
-    GFM $ lift $ getCompose m
+expr :: FitExprM p a -> GlobalFitM p (FitExpr (ParamLoc p) p a)
+expr (FEM m) = GFM $ lift $ getCompose m
 
 -- | Hoist an expression into a @FitExprM@
-hoist :: FitExpr s a -> FitExprM s a
+hoist :: FitExpr (ParamLoc p) p a -> FitExprM p a
 hoist = FEM . Compose . pure
 
 newtype GlobalFitM s a = GFM (WriterT [Curve s] (State [ParamIdx]) a)
@@ -137,14 +120,14 @@ newtype GlobalFitM s a = GFM (WriterT [Curve s] (State [ParamIdx]) a)
 globalParam :: s -> GlobalFitM s (FitExprM s s)
 globalParam initial = GFM $ do
     idx <- lift popHead
-    return $ FEM $ Compose $ return $ Param idx initial
+    return $ FEM $ Compose $ return $ Param $ ParamLoc idx initial
 
-data FitDesc a = FitDesc { fitModel  :: FitExpr a (a -> a)
+data FitDesc a = FitDesc { fitModel  :: FitExpr (ParamLoc a) a (a -> a)
                          , fitPoints :: VS.Vector (Point a)
                          }
 
 fitEval :: VS.Storable a => FitDesc a -> Packed VS.Vector a -> a -> a
-fitEval fd packed = evalParam (fitModel fd) packed
+fitEval fd params = evalFitExpr (\(ParamLoc p _) -> params ^. packed p) (fitModel fd)
 
 -- | Add a curve to the fit, returning a function unpacking the
 -- model parameters
@@ -157,34 +140,20 @@ fit points (FEM m) = do
     GFM $ tell [Curve points m']
     return $ FitDesc { fitModel = m', fitPoints = points }
 
--- | Evaluate the fit expression given the initial values
-evalDefault :: FitExpr s a -> a
-evalDefault (Pure a) = a
-evalDefault (Param _ a) = a
-evalDefault (ApT f a) = (evalDefault f) (evalDefault a)
-evalDefault (Bind a f) = evalDefault $ f (evalDefault a)
-
--- | Evaluate the fit expression given a parameter vector
-evalParam :: VS.Storable s => FitExpr s a -> Packed VS.Vector s -> a
-evalParam (Pure a) _ = a
-evalParam (Param (ParamIdx i) _) (Packed v) = v VS.! i
-evalParam (ApT f a) v = (evalParam f v) (evalParam a v)
-evalParam (Bind a f) v = evalParam (f (evalParam a v)) v
-
 -- | Count the number of fitted parameters
-freeParams :: FitExpr s a -> Int
+freeParams :: FitExpr (ParamLoc p) p a -> Int
 freeParams = M.size . packParams'
 
-packParams' :: FitExpr s a -> M.Map ParamIdx s
+packParams' :: FitExpr (ParamLoc p) p a -> M.Map ParamIdx p
 packParams' ps = go ps M.empty
   where
-    go :: FitExpr s a -> M.Map ParamIdx s -> M.Map ParamIdx s
-    go (Param i a) m = m & at i .~ Just a
-    go (Pure _) m = m
-    go (ApT f a) m = go a $ go f m
-    go (Bind a g) m = go (g $ evalDefault a) $ go a m
+    go :: FitExpr (ParamLoc p) p a -> M.Map ParamIdx p -> M.Map ParamIdx p
+    go (Param (ParamLoc i v)) m  = m & at i .~ Just v
+    go (Pure _) m                = m
+    go (ApT f a) m               = go f $ go a $ m
+    go (Bind a g) m              = go (g $ evalFitExpr (\(ParamLoc _ v)->v) a) $ go a m
 
-packParams :: (VS.Storable s, Num s) => FitExpr s a -> VS.Vector s
+packParams :: (VS.Storable p, Num p) => FitExpr (ParamLoc p) p a -> VS.Vector p
 packParams = go . packParams'
   where
     go m = VS.generate (n+1) pack
@@ -193,6 +162,9 @@ packParams = go . packParams'
                      Just v  -> v
                      Nothing -> error $ "Couldn't find ParamIdx "++show i
         (ParamIdx n,_) = M.findMax m
+
+evalParam :: (VS.Storable p) => FitExpr (ParamLoc p) p a -> Packed VS.Vector p -> a
+evalParam e p = evalFitExpr (\(ParamLoc i _)->p ^. packed i) e
 
 -- | Run a model definition
 runGlobalFitM :: (VS.Storable s, Num s)
