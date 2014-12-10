@@ -21,7 +21,6 @@ module ModelFit.Model
     , FitExprM
     , FitExpr
     , param, fixed
-    , paramExpr
     , fit
     , FitDesc (..)
     , fitEval
@@ -35,9 +34,12 @@ module ModelFit.Model
     , runGlobalFitT
     , runGlobalFitM
     , Curve(..)
-      -- * Models
+      -- * Fit models
     , Model
     , liftOp
+      -- * Utilities
+    , paramExpr
+    , liftExpr
     ) where
 
 import Prelude hiding (sequence, foldl, mapM, product)
@@ -91,19 +93,17 @@ popHead = do
     id %= tail
     return x
 
+liftExpr :: Monad m => FitExpr (ParamLoc p) p a -> FitExprT p m a
+liftExpr = FEM . Compose . return
+
 paramExpr :: Monad m => p -> FitExprT p m (FitExpr (ParamLoc p) p p)
 paramExpr initial = FEM $ Compose $ do
     idx <- popHead
     return $ return $ Param $ ParamLoc idx initial
 
--- TODO:
--- newParam:: a -> FitExprT 
-
 -- | Introduce a new parameter to be optimized over (given an initial value)
-param :: Monad m => a -> FitExprT a m a
-param initial = FEM $ Compose $ do
-    idx <- popHead
-    return $ Param $ ParamLoc idx initial
+param :: (Monad m, Functor m) => a -> FitExprT a m a
+param initial = paramExpr initial  >>= liftExpr
 
 -- | Lift a pure value into a fit expression
 fixed :: (Monad m, Functor m) => a -> FitExprT p m a

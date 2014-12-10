@@ -40,14 +40,13 @@ globalParam :: String -> a -> GlobalFitM a (FitExprM a a)
 globalParam name initial = do
     p <- Mo.globalParam initial >>= Mo.expr
     lift $ tell $ M.singleton name p
-    --return $ WriterT $ fmap (\a->(a, mempty)) (Mo.hoist p)
-    undefined
+    return $ Mo.liftExpr p
 
 param :: String -> a -> FitExprM a a
 param name initial = do
     p <- Mo.paramExpr initial
     lift $ tell $ M.singleton name p
-    undefined
+    Mo.liftExpr p
 
 runGlobalFitM :: (Num p, VS.Storable p)
               => GlobalFitM p a
