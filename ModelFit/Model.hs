@@ -21,6 +21,7 @@ module ModelFit.Model
     , FitExprM
     , FitExpr
     , param, fixed
+    , paramExpr
     , fit
     , FitDesc (..)
     , fitEval
@@ -103,6 +104,12 @@ popHead = do
     x <- use $ singular _head
     id %= tail
     return x
+
+
+paramExpr :: p -> FitExprM p (FitExpr (ParamLoc p) p p)
+paramExpr initial = FEM $ Compose $ do
+    idx <- popHead
+    return $ return $ Param $ ParamLoc idx initial
 
 -- | Introduce a new parameter to be optimized over (given an initial value)
 param :: a -> FitExprM a a

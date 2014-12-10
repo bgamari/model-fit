@@ -23,7 +23,7 @@ import Data.Default
 import Data.Colour
 import Data.Colour.Names
 
-import ModelFit.Model
+import ModelFit.Model.Named
 import ModelFit.Types (withVar)
 import ModelFit.Fit
 import ModelFit.Models.Lifetime
@@ -70,8 +70,8 @@ main = printing $ do
     let fluorBg = V.head fluorPts ^. _y
         Just fluorAmp = maximumOf (each . _y) fluorPts
         fitPts = V.convert $ V.take period fluorPts
-    let (curves, p0, (fd, params)) = runGlobalFitM $ runWriterT $ do
-          taus <- mapM (\i->namedGlobalParam ("tau"++show i) (realToFrac $ i*1000)) [1..components args]
+    let (curves, p0, params, fd) = runGlobalFitM $ do
+          taus <- mapM (\i->globalParam ("tau"++show i) (realToFrac $ i*1000)) [1..components args]
           let component :: FitExprM Double Double -> FitExprM Double (Double -> Double)
               component tau = lifetimeModel <$> p
                 where p = sequenceA $ LifetimeP { _decayTime = tau
