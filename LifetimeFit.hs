@@ -19,21 +19,21 @@ import Data.Colour
 import Data.Colour.Names
 
 import ModelFit.Model.Named
-import ModelFit.Types (withVar)
+import ModelFit.Types (Point, withVar)
 import ModelFit.Fit
 import ModelFit.Models.Lifetime
 
 import CsvUtils
 
 data Opts = Opts { irfPath    :: FilePath
-                 , fluorPath  :: FilePath
+                 , fluorPath  :: [FilePath]
                  , components :: Int
                  }
 
 opts :: Parser Opts
 opts = Opts
     <$> strOption (long "irf" <> metavar "FILE" <> help "IRF curve path")
-    <*> strArgument (metavar "FILE" <> help "Fluorescence curve path")
+    <*> many (strArgument (metavar "FILE" <> help "Fluorescence curve path"))
     <*> option auto (long "components" <> short 'n' <> value 1 <> metavar "N" <> help "Number of components")
 
 printing :: EitherT String IO () -> IO ()
@@ -63,54 +63,63 @@ mode v = go (VG.head v', 1) $ VG.tail v'
         n' = VG.length x
         a' = VG.head v
 
+sumModels :: (Applicative f, Num a) => [f (b -> a)] -> f (b -> a)
+sumModels = foldl (\accum m->liftOp (+) <$> accum <*> m) (pure $ const 0)
+
 main :: IO ()
 main = printing $ do
     args <- liftIO $ execParser $ info (helper <*> opts) (fullDesc <> progDesc "Fit fluorescence decays")
     let withPoissonVar = withVar id
-    irfPts <- V.take 3124 . V.map withPoissonVar <$> readPoints (irfPath args)
-    fluorPts <- V.take 4095 . V.map withPoissonVar <$> readPoints (fluorPath args)
+    irfPts <- V.take 4095 . V.map withPoissonVar <$> readPoints (irfPath args)
+    fluorPts <- mapM (\fname->V.take 4095 . V.map withPoissonVar <$> readPoints fname) (fluorPath args)
 
-    let Just irfBg = mode $ V.map (^. _y) irfPts
-    liftIO $ putStrLn $ "IRF background: "++show irfBg
+    let Just irfBg = mode $ V.map (^. _y) $ V.take 1500 irfPts -- HACK
     let irfHist = V.convert $ V.map (subtract irfBg) $ V.drop offset $ V.map (^._y) irfPts
         offset = 0
         --period = round $ 1/80e6 / (jiffy * 1e-12)
         period = findPeriod irfHist
         periods = 2
-        irf = mkIrf irfHist (periods*period)
 
-    let fluorBg = V.head fluorPts ^. _y
-        Just fluorAmp = maximumOf (each . _y) fluorPts
-        fitPts = V.convert $ V.take period fluorPts
-    let (fd, curves, p0, params) = runGlobalFitM $ do
+    liftIO $ putStrLn $ "Period: "++show period
+    liftIO $ putStrLn $ "IRF background: "++show irfBg
+    let irf = mkIrf irfHist (periods*period)
+
+    let fitFluor :: String                      -- ^ Curve name
+                 -> [FitExprM Double Double]    -- ^ lifetimes
+                 -> V.Vector (Point Double)     -- ^ points
+                 -> GlobalFitM Double (FitDesc Double)
+        fitFluor name taus pts = do
+            let fluorBg = V.head pts ^. _y
+                Just fluorAmp = maximumOf (each . _y) pts
+                fitPts = V.convert $ V.take period pts
+            let component :: Int -> FitExprM Double Double -> FitExprM Double (Double -> Double)
+                component i tau = lifetimeModel <$> p
+                  where p = sequenceA $ LifetimeP { _decayTime = tau
+                                                  , _amplitude = param (name++"-amp"++show i) (fluorAmp / 2)
+                                                  }
+            decayModel <- expr $ sumModels $ zipWith component [1..] taus
+            --background <- expr $ const <$> param "bg" fluorBg
+            let background = return $ const 0
+            convolved <- expr $ convolvedModel irf (periods*period) jiffy <$> hoist decayModel
+            m <- expr $ liftOp (+) <$> hoist convolved <*> hoist background
+            fit fitPts $ hoist m
+
+    let (fds, curves, p0, params) = runGlobalFitM $ do
           taus <- mapM (\i->globalParam ("tau"++show i) (realToFrac $ i*1000)) [1..components args]
-          let component :: Int -> FitExprM Double Double -> FitExprM Double (Double -> Double)
-              component i tau = lifetimeModel <$> p
-                where p = sequenceA $ LifetimeP { _decayTime = tau
-                                                , _amplitude = param ("amp"++show i) (fluorAmp / 2)
-                                                }
-          let decayModels = zipWith component [1..] taus
-              sumModels :: (Applicative f, Num a) => [f (b -> a)] -> f (b -> a)
-              sumModels = foldl (\accum m->liftOp (+) <$> accum <*> m) (pure $ const 0)
-          decayModel <- expr $ sumModels decayModels
-          --background <- expr $ const <$> param "bg" fluorBg
-          let background = return $ const 0
-          convolved <- expr $ convolvedModel irf (periods*period) <$> hoist decayModel
-          m <- expr $ liftOp (+) <$> hoist convolved <*> hoist background
-          fit fitPts $ hoist m
+          forM (zip ["curve"++show i | i <- [1..]] fluorPts) $ \(name,pts) -> fitFluor name taus pts
 
     let Right fit = leastSquares curves p0
 
-    liftIO $ plot "hi.png"
-        [ let f = fitEval fd fit
-              ts = take 3000 $ V.toList $ V.map (^._x) irfPts
-          in map (\t->(t, f t)) ts
-        , zip [jiffy*i | i <- [0..]] (toListOf (each . _y) fluorPts)
-        ]
     liftIO $ print $ fmap (flip evalParam p0) params
     liftIO $ print $ fmap (flip evalParam fit) params
-    liftIO $ putStrLn $ "Period: "++show period
-    liftIO $ putStrLn $ "Reduced Chi squared: "++show (reducedChiSquared fd fit)
+    forM_ (zip3 (fluorPath args) fluorPts fds) $ \(fname,pts,fd) -> do
+        liftIO $ plot (fname++".png")
+            [ let f = fitEval fd fit
+                  ts = take 3000 $ V.toList $ V.map (^._x) irfPts
+              in map (\t->(t, f t)) ts
+            , zip [jiffy*i | i <- [0..]] (toListOf (each . _y) pts)
+            ]
+        liftIO $ putStrLn $ "Reduced Chi squared: "++show (reducedChiSquared fd fit)
 
     return ()
 

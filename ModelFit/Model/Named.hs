@@ -17,11 +17,11 @@ module ModelFit.Model.Named
     , fitEval
     , evalParam
     , runGlobalFitM
+    , FitDesc
       -- * Helpers
     , liftOp
     ) where
 
-import Data.Monoid
 import Control.Monad.Trans.Writer (Writer, runWriter, tell)
 import Control.Monad.Trans.Class (lift)
 import qualified Data.Vector.Storable as VS
@@ -30,7 +30,6 @@ import qualified Data.Map as M
 import ModelFit.Model ( Packed, packed, FitDesc, Curve, fit, ParamLoc, FitExpr
                       , expr, hoist, liftOp, fitEval, evalParam)
 import qualified ModelFit.Model as Mo
-import ModelFit.Types
 
 type Params p = M.Map String (Mo.FitExpr (Mo.ParamLoc p) p p)
 type FitExprM p = Mo.FitExprT p (Writer (Params p))

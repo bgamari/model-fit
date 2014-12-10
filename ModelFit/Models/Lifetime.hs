@@ -21,14 +21,12 @@ module ModelFit.Models.Lifetime
 
 import Control.Lens
 import Data.Foldable
-import Data.Traversable
 import Data.Functor.Classes
 import Data.Distributive
 import Data.Distributive.Generic
 import GHC.Generics (Generic1)
 import qualified Data.Heap as Heap
 import qualified Data.Vector.Storable as VS
-import Data.Complex
 
 import Numeric.FFT.Vector.Invertible
 import ModelFit.Model
@@ -42,7 +40,7 @@ instance Distributive LifetimeParams where distribute = genericDistribute
 
 
 instance Show1 LifetimeParams where
-    showsPrec1 prec (LifetimeP decay amp) a =
+    showsPrec1 _ (LifetimeP decay amp) a =
         "(Lifetime "++show decay++" "++show amp++")"++a
 
 lifetimeModel :: RealFloat a => Model LifetimeParams a
@@ -51,6 +49,7 @@ lifetimeModel = \(LifetimeP taud amp) tau -> amp * exp (-tau / taud)
 
 data Irf a = Irf { irfSamples :: !(VS.Vector a)
                  }
+           deriving (Show)
 
 -- | Construct an IRF
 mkIrf :: (Fractional a, VS.Storable a)
@@ -79,21 +78,24 @@ convolve a b = run dftC2R $ VS.zipWith (*) a' b'
 
 type Time = Double
 
--- | @convolvedModel irf nbins decay@ is a model described by
+-- | @convolvedModel irf nbins jiffy decay@ is a model described by
 -- @decay$ convolved with @irf@. The model is valid over @x@ from
--- 0 to @nbins@
-convolvedModel :: Irf Double -> Int -> (Double -> Double) -> (Double -> Double)
-convolvedModel irf nbins decayModel = f
+-- 0 to @jiffy * nbins@
+convolvedModel :: Irf Double -> Int -> Time -> (Double -> Double) -> (Double -> Double)
+convolvedModel irf nbins jiffy decayModel = f
   where
     --paddedLength = nbins + VS.length (irfSamples irf) - 1
     paddedLength = nbins
     paddedIrf = padTo paddedLength 0 (irfSamples irf)
 
-    f x = convolved VS.! round x
+    f x
+      | i >= nbins = error $ "convolvedModel: x="++show x++" requested but only computed "++show nbins++" bins."
+      | otherwise  = convolved VS.! i
       where
+        i = round $ x / jiffy
         convolved = convolve paddedIrf (padTo paddedLength 0 m)
         m = let bins = VS.enumFromTo 0 nbins :: VS.Vector Int
-            in VS.map (\n->decayModel $ realToFrac n) bins
+            in VS.map (\n->decayModel $ realToFrac n * jiffy) bins
 {-# INLINEABLE convolvedModel #-}
 
 padTo :: VS.Storable a => Int -> a -> VS.Vector a -> VS.Vector a
