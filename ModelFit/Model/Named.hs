@@ -5,51 +5,53 @@ module ModelFit.Model.Named
     , ParamLoc
     , Params
       -- * Fit expressions
+    , FitExpr
     , FitExprM
+    , param
+    , expr
+    , hoist
       -- * Global fitting
     , GlobalFitM
     , globalParam
     , fit
+    , fitEval
+    , evalParam
     , runGlobalFitM
-      -- * Fit expressions
-    , FitExpr
+      -- * Helpers
+    , liftOp
     ) where
 
 import Data.Monoid
-import Control.Monad.Trans.Writer (WriterT(..), runWriterT, tell)
+import Control.Monad.Trans.Writer (Writer, runWriter, tell)
 import Control.Monad.Trans.Class (lift)
 import qualified Data.Vector.Storable as VS
 import qualified Data.Map as M
 
-import ModelFit.Model (Packed, packed, FitDesc, Curve)
+import ModelFit.Model ( Packed, packed, FitDesc, Curve, fit, ParamLoc, FitExpr
+                      , expr, hoist, liftOp, fitEval, evalParam)
 import qualified ModelFit.Model as Mo
 import ModelFit.Types
 
-type Params s = M.Map String (Mo.FitExpr (Mo.ParamLoc s) s s)
-type FitExprM s = WriterT (Params s) (Mo.FitExprM s)
-type GlobalFitM s = WriterT (Params s) (Mo.GlobalFitM s) 
+type Params p = M.Map String (Mo.FitExpr (Mo.ParamLoc p) p p)
+type FitExprM p = Mo.FitExprT p (Writer (Params p))
+type GlobalFitM p = Mo.GlobalFitT p (Writer (Params p)) 
 
 globalParam :: String -> a -> GlobalFitM a (FitExprM a a)
 globalParam name initial = do
-    p <- lift $ Mo.globalParam initial >>= Mo.expr
-    tell $ M.singleton name p
+    p <- Mo.globalParam initial >>= Mo.expr
+    lift $ tell $ M.singleton name p
     --return $ WriterT $ fmap (\a->(a, mempty)) (Mo.hoist p)
-    lift p
+    undefined
 
 param :: String -> a -> FitExprM a a
 param name initial = do
-    p <- lift $ Mo.paramExpr initial
-    tell $ M.singleton name p
-    WriterT $ fmap (\a->(a, mempty)) $ Mo.hoist p
+    p <- Mo.paramExpr initial
+    lift $ tell $ M.singleton name p
+    undefined
 
-fit :: (VS.Storable a)
-    => VS.Vector (Point a)
-    -> FitExprM a (a -> a)
-    -> GlobalFitM a (FitDesc a)
-fit points action = do
-    (expr, params) <- Mo.expr $ lift $ runWriterT action
-    tell params
-    lift $ Mo.fit points expr
-
-runGlobalFitM :: GlobalFitM s a -> ([Curve s], Packed VS.Vector s, Params s, a)
-runGlobalFitM action = Mo.runGlobalFitM $ runWriterT action
+runGlobalFitM :: (Num p, VS.Storable p)
+              => GlobalFitM p a
+              -> (a, [Curve p], Packed VS.Vector p, Params p)
+runGlobalFitM action =
+    let ((a,b,c), d) = runWriter $ Mo.runGlobalFitT action
+    in (a,b,c,d)

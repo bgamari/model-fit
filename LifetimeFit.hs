@@ -47,14 +47,6 @@ jiffy = 8 :: Double
 
 dropLast n v = V.take (V.length v - n) v
 
-type NamedGlobalFitM s = WriterT (M.Map String (FitExpr (ParamLoc s) s s)) (GlobalFitM s)
-
-namedGlobalParam :: String -> a -> NamedGlobalFitM a (FitExprM a a)
-namedGlobalParam name initial = do
-    p <- lift $ globalParam initial >>= expr
-    tell $ M.singleton name p
-    return $ hoist p
-
 main = printing $ do
     args <- liftIO $ execParser $ info (helper <*> opts) (fullDesc <> progDesc "Fit fluorescence decays")
     let withPoissonVar = withVar id
@@ -70,7 +62,7 @@ main = printing $ do
     let fluorBg = V.head fluorPts ^. _y
         Just fluorAmp = maximumOf (each . _y) fluorPts
         fitPts = V.convert $ V.take period fluorPts
-    let (curves, p0, params, fd) = runGlobalFitM $ do
+    let (fd, curves, p0, params) = runGlobalFitM $ do
           taus <- mapM (\i->globalParam ("tau"++show i) (realToFrac $ i*1000)) [1..components args]
           let component :: FitExprM Double Double -> FitExprM Double (Double -> Double)
               component tau = lifetimeModel <$> p

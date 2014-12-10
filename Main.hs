@@ -28,7 +28,7 @@ main = do
         genParams2 = defaultParams & (diffTime      .~ 30)
                                    . (concentration .~ 2)
         m = liftOp (*) (diff3DModel genParams1) (diff3DModel genParams2)
-        (curves, p0, (unpackA, unpackB)) = sources points
+        ((unpackA, unpackB), curves, p0) = sources points
         points = V.fromList [ let x = 2**i in Point x (m x) 1
                             | i <- [1, 1.1..10]
                             ]

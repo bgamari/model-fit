@@ -128,7 +128,7 @@ main' = runEitherT $ do
     points' <- readPoints path
     let points = VS.convert $ prepareObs mc points'
 
-    let (curves, p0, (params, fd)) = runGlobalFitM (fm points)
+    let ((params, fd), curves, p0) = runGlobalFitM (fm points)
         Right fit = leastSquares curves p0
 
     let xs = [10**i | i <- [0, 0.01 .. 6]]
