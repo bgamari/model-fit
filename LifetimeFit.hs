@@ -74,11 +74,10 @@ main = printing $ do
     irfPts <- V.take 3124 . V.map withPoissonVar <$> readPoints (irfPath args)
     fluorPts <- V.take 4095 . V.map withPoissonVar <$> readPoints (fluorPath args)
 
-    liftIO $ print $ V.map (^. _y) irfPts
-
     let Just irfBg = mode $ V.map (^. _y) irfPts
-    liftIO $ print $ "IRF background: "++show irfBg
-    let irfHist = V.convert $ V.map (subtract irfBg) $ V.map (^._y) irfPts
+    liftIO $ putStrLn $ "IRF background: "++show irfBg
+    let irfHist = V.convert $ V.map (subtract irfBg) $ V.drop offset $ V.map (^._y) irfPts
+        offset = 0
         --period = round $ 1/80e6 / (jiffy * 1e-12)
         period = findPeriod irfHist
         periods = 2
