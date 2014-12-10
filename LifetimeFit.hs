@@ -67,15 +67,15 @@ main = printing $ do
           let component :: FitExprM Double Double -> FitExprM Double (Double -> Double)
               component tau = lifetimeModel <$> p
                 where p = sequenceA $ LifetimeP { _decayTime = tau
-                                                , _amplitude = param $ fluorAmp / 2
+                                                , _amplitude = param "tau" (fluorAmp / 2)
                                                 }
-          decayModel <- lift $ expr $ foldl (\accum tau->liftOp (+) <$> accum <*> component tau) (pure $ const 0) taus
+          decayModel <- expr $ foldl (\accum tau->liftOp (+) <$> accum <*> component tau) (pure $ const 0) taus
           --background <- lift $ expr $ (\p _ -> p) <$> param fluorBg
           let background = return $ const 0
-          convolved <- lift $ expr $ convolvedModel irf (periods*period) jiffy <$> hoist decayModel
-          m <- lift $ expr $ liftOp (+) <$> hoist convolved <*> hoist background
+          convolved <- expr $ convolvedModel irf (periods*period) jiffy <$> hoist decayModel
+          m <- expr $ liftOp (+) <$> hoist convolved <*> hoist background
           --let m = convolved
-          lift $ fit fitPts $ hoist m
+          fit fitPts $ hoist m
 
     let Right fit = leastSquares curves p0
     --let fit = p0
