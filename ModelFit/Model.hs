@@ -41,7 +41,7 @@ import Prelude hiding (sequence, foldl, mapM, product)
 import Data.Functor.Compose
 import Control.Applicative
 import Control.Monad.Writer (WriterT, runWriterT, tell)
-import Control.Monad.State (StateT, State, evalState)
+import Control.Monad.State (StateT, State, state, runState, evalState)
 import Control.Monad.Trans.Class (lift)
 import Data.Traversable
 
@@ -88,6 +88,15 @@ data Curve a = Curve { curvePoints :: VS.Vector (Point a)
 newtype FitExprM p a = FEM (Compose (State [ParamIdx]) (FitExpr (ParamLoc p) p) a)
                      deriving (Functor, Applicative)
 
+instance Monad (FitExprM p) where
+    return = pure
+    FEM (Compose a) >>= f = FEM $ Compose $ state $ \s->
+        case runState a s of
+            (ra, s') -> runState f' s'
+              where
+                FEM (Compose f') = f b
+                b = evalFitExpr (\(ParamLoc _ p)->p) ra
+
 -- | Pop the first element of the state
 popHead :: Monad m => StateT [s] m s
 popHead = do
@@ -96,7 +105,7 @@ popHead = do
     return x
 
 -- | Introduce a new parameter to be optimized over (given an initial value)
-param :: VS.Storable a => a -> FitExprM a a
+param :: a -> FitExprM a a
 param initial = FEM $ Compose $ do
     idx <- popHead
     return $ Param $ ParamLoc idx initial
