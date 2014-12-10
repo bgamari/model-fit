@@ -3,18 +3,11 @@ import Data.Traversable
 import Data.Foldable
 import Control.Monad (void)
 import Control.Monad.Trans.Either
-import Control.Monad.Trans.Class
 import Control.Monad.IO.Class
 import qualified Data.Vector as V
 import qualified Data.Vector.Generic as VG
-import qualified Data.Vector.Storable as VS
 import Data.Vector.Algorithms.Heap (sort)
 import Options.Applicative
-import Data.Functor.Product
-import Data.Functor.Identity
-
-import qualified Data.Map as M
-import Control.Monad.Writer (WriterT, runWriterT, tell)
 
 import Linear
 import Control.Lens hiding (argument)
@@ -37,6 +30,7 @@ data Opts = Opts { irfPath    :: FilePath
                  , components :: Int
                  }
 
+opts :: Parser Opts
 opts = Opts
     <$> strOption (long "irf" <> metavar "FILE" <> help "IRF curve path")
     <*> strArgument (metavar "FILE" <> help "Fluorescence curve path")
@@ -45,7 +39,8 @@ opts = Opts
 printing :: EitherT String IO () -> IO ()
 printing action = runEitherT action >>= either print return
 
-jiffy = 8 :: Double
+jiffy :: Double
+jiffy = 8
 
 dropLast n v = V.take (V.length v - n) v
 
@@ -68,6 +63,7 @@ mode v = go (VG.head v', 1) $ VG.tail v'
         n' = VG.length x
         a' = VG.head v
 
+main :: IO ()
 main = printing $ do
     args <- liftIO $ execParser $ info (helper <*> opts) (fullDesc <> progDesc "Fit fluorescence decays")
     let withPoissonVar = withVar id
@@ -97,15 +93,13 @@ main = printing $ do
               sumModels :: (Applicative f, Num a) => [f (b -> a)] -> f (b -> a)
               sumModels = foldl (\accum m->liftOp (+) <$> accum <*> m) (pure $ const 0)
           decayModel <- expr $ sumModels decayModels
-          background <- expr $ const <$> param "bg" fluorBg
-          --let background = return $ const 0
-          convolved <- expr $ convolvedModel irf (periods*period) jiffy <$> hoist decayModel
+          --background <- expr $ const <$> param "bg" fluorBg
+          let background = return $ const 0
+          convolved <- expr $ convolvedModel irf (periods*period) <$> hoist decayModel
           m <- expr $ liftOp (+) <$> hoist convolved <*> hoist background
-          --let m = convolved
           fit fitPts $ hoist m
 
     let Right fit = leastSquares curves p0
-    --let fit = p0
 
     liftIO $ plot "hi.png"
         [ let f = fitEval fd fit
@@ -115,7 +109,7 @@ main = printing $ do
         ]
     liftIO $ print $ fmap (flip evalParam p0) params
     liftIO $ print $ fmap (flip evalParam fit) params
-    liftIO $ print period
+    liftIO $ putStrLn $ "Period: "++show period
     liftIO $ putStrLn $ "Reduced Chi squared: "++show (reducedChiSquared fd fit)
 
     return ()

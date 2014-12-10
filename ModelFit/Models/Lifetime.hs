@@ -79,21 +79,21 @@ convolve a b = run dftC2R $ VS.zipWith (*) a' b'
 
 type Time = Double
 
--- | @convolvedModel irf nbins jiffy decay@ is a model described by
+-- | @convolvedModel irf nbins decay@ is a model described by
 -- @decay$ convolved with @irf@. The model is valid over @x@ from
--- 0 to @jiffy * nbins@
-convolvedModel :: Irf Double -> Int -> Time -> (Double -> Double) -> (Double -> Double)
-convolvedModel irf nbins jiffy decayModel = f
+-- 0 to @nbins@
+convolvedModel :: Irf Double -> Int -> (Double -> Double) -> (Double -> Double)
+convolvedModel irf nbins decayModel = f
   where
     --paddedLength = nbins + VS.length (irfSamples irf) - 1
     paddedLength = nbins
     paddedIrf = padTo paddedLength 0 (irfSamples irf)
 
-    f x = convolved VS.! round (x / jiffy)
+    f x = convolved VS.! round x
       where
         convolved = convolve paddedIrf (padTo paddedLength 0 m)
         m = let bins = VS.enumFromTo 0 nbins :: VS.Vector Int
-            in VS.map (\n->decayModel (realToFrac n * jiffy)) bins
+            in VS.map (\n->decayModel $ realToFrac n) bins
 {-# INLINEABLE convolvedModel #-}
 
 padTo :: VS.Storable a => Int -> a -> VS.Vector a -> VS.Vector a

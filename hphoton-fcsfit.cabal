@@ -115,6 +115,7 @@ executable hphoton-fcsfit-web
   default-language:    Haskell2010
 
 executable hphoton-lifetime
+  ghc-options:         -Wall
   main-is:             LifetimeFit.hs
   default-language:    Haskell2010
   other-extensions:    DeriveFunctor,
