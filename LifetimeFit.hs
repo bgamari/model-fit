@@ -116,20 +116,22 @@ main = printing $ do
         liftIO $ plot (fname++".png")
             [ let f = fitEval fd fit
                   ts = take 3000 $ V.toList $ V.map (^._x) irfPts
-              in map (\t->(t, f t)) ts
-            , zip [jiffy*i | i <- [0..]] (toListOf (each . _y) pts)
+              in toPlot $ def & plot_lines_values .~ [map (\t->(t, f t)) ts]
+                              & plot_lines_style . line_color .~ opaque red
+                              & plot_lines_title .~ "Fit"
+            , toPlot $ def & plot_points_values .~ zip [jiffy*i | i <- [0..]] (toListOf (each . _y) pts)
+                           & plot_points_style . point_color .~ opaque green
+                           & plot_points_title .~ "Observed"
             ]
         liftIO $ putStrLn $ "Reduced Chi squared: "++show (reducedChiSquared fd fit)
 
     return ()
 
-plot :: FilePath -> [[(Double, Double)]] -> IO ()
-plot path curves =
+plot :: FilePath -> [Plot Double Double] -> IO ()
+plot path plots =
     void $ renderableToFile def path
          $ toRenderable
-         $ layout_plots .~
-             zipWith (\pts c->toPlot $ def & plot_points_values .~ pts
-                                           & plot_points_style . point_color .~ c) curves (cycle colors)
+         $ layout_plots .~ plots
          $ layout_y_axis . laxis_generate .~ autoScaledLogAxis def
          $ def
 
