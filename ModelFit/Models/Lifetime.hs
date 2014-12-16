@@ -87,13 +87,13 @@ convolvedModel irf nbins jiffy decayModel = f
     --paddedLength = nbins + VS.length (irfSamples irf) - 1
     paddedLength = nbins
     paddedIrf = padTo paddedLength 0 (irfSamples irf)
-
+    convolveWithIrf = convolve paddedIrf
     f x
       | i >= nbins = error $ "convolvedModel: x="++show x++" requested but only computed "++show nbins++" bins."
       | otherwise  = convolved VS.! i
       where
         i = round $ x / jiffy
-        convolved = convolve paddedIrf (padTo paddedLength 0 m)
+        convolved = convolveWithIrf (padTo paddedLength 0 m)
         m = let bins = VS.enumFromTo 0 nbins :: VS.Vector Int
             in VS.map (\n->decayModel $ realToFrac n * jiffy) bins
 {-# INLINEABLE convolvedModel #-}
