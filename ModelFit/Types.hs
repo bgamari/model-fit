@@ -52,7 +52,7 @@ instance (Storable x, Storable y) => Storable (Point x y) where
 instance Functor (Point x) where
     fmap f (Point x y var) = Point x (f y) (f var)
 
-instance FromRecord (Point Double Double) where
+instance (FromField x, FromField y) => FromRecord (Point x y) where
     parseRecord v
       | V.length v == 3 = Point <$> v Csv..! 0
                                 <*> v Csv..! 1
