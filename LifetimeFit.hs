@@ -73,19 +73,19 @@ main :: IO ()
 main = printing $ do
     args <- liftIO $ execParser $ info (helper <*> opts) (fullDesc <> progDesc "Fit fluorescence decays")
     let withPoissonVar = withVar id
-    irfPts <- V.take 4095 . V.map withPoissonVar <$> readPoints (irfPath args)
-    fluorPts <- mapM (\fname->V.take 4095 . V.map withPoissonVar <$> readPoints fname) (fluorPath args)
+    irfPts <- V.take 4090 . V.map withPoissonVar <$> readPoints (irfPath args)
+    fluorPts <- mapM (\fname->V.take 3200 . V.map withPoissonVar <$> readPoints fname) (fluorPath args)
 
     let Just irfBg = mode $ V.map (^. _y) $ V.take 1500 irfPts -- HACK
     let irfHist = V.convert $ V.map (subtract irfBg) $ V.drop offset $ V.map (^._y) irfPts
         offset = 0
         --period = round $ 1/80e6 / (jiffy * 1e-12)
         period = findPeriod irfHist
-        periods = 2
+        irfLength = round $ 2.0 * realToFrac period
 
     liftIO $ putStrLn $ "Period: "++show period
     liftIO $ putStrLn $ "IRF background: "++show irfBg
-    let irf = mkIrf irfHist (periods*period)
+    let irf = mkIrf irfHist irfLength
 
     let fitFluor :: String                      -- ^ Curve name
                  -> [FitExprM Double Double]    -- ^ lifetimes
@@ -103,7 +103,7 @@ main = printing $ do
             decayModel <- expr $ sumModels $ zipWith component [1..] taus
             --background <- expr $ const <$> param "bg" fluorBg
             let background = return $ const 0
-            convolved <- expr $ convolvedModel irf (periods*period) jiffy <$> hoist decayModel
+            convolved <- expr $ convolvedModel irf (V.length pts) jiffy <$> hoist decayModel
             m <- expr $ liftOp (+) <$> hoist convolved <*> hoist background
             fit fitPts $ hoist m
 
@@ -111,13 +111,13 @@ main = printing $ do
           taus <- mapM (\i->globalParam ("tau"++show i) (realToFrac $ i*1000)) [1..components args]
           forM (zip ["curve"++show i | i <- [1..]] fluorPts) $ \(name,pts) -> fitFluor name taus pts
 
-    let Right fit = leastSquares curves p0
+    let fit = either (error . show) id $ leastSquares curves p0
 
     liftIO $ print $ fmap (flip evalParam p0 . Param) params
     liftIO $ print $ fmap (flip evalParam fit . Param) params
     forM_ (zip3 (fluorPath args) fluorPts fds) $ \(fname,pts,fd) -> do
         let path = fname++".png"
-            ts = take 3000 $ V.toList $ V.map (^._x) irfPts
+            ts = V.toList $ V.map (^._x) pts
         liftIO $ void $ renderableToFile def path
                $ toRenderable $ plotFit ts pts (fitEval fd fit)
         liftIO $ putStrLn $ "Reduced Chi squared: "++show (reducedChiSquared fd fit)

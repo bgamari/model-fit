@@ -47,11 +47,12 @@ lifetimeModel :: RealFloat a => Model LifetimeParams a
 lifetimeModel = \(LifetimeP taud amp) tau -> amp * exp (-tau / taud)
 {-# INLINE lifetimeModel #-}
 
+-- | A normalized response function
 data Irf a = Irf { irfSamples :: !(VS.Vector a)
                  }
            deriving (Show)
 
--- | Construct an IRF
+-- | Construct an IRF. The function is automatically normalized.
 mkIrf :: (Fractional a, VS.Storable a)
       => VS.Vector a -> Int -> Irf a
 mkIrf samples period = Irf (VS.map (/ norm) v)
@@ -84,12 +85,12 @@ type Time = Double
 convolvedModel :: Irf Double -> Int -> Time -> (Double -> Double) -> (Double -> Double)
 convolvedModel irf nbins jiffy decayModel = f
   where
-    --paddedLength = nbins + VS.length (irfSamples irf) - 1
-    paddedLength = nbins
+    paddedLength = nbins + VS.length (irfSamples irf) - 1
+    --paddedLength = nbins
     paddedIrf = padTo paddedLength 0 (irfSamples irf)
     convolveWithIrf = convolve paddedIrf
     f x
-      | i >= nbins = error $ "convolvedModel: x="++show x++" requested but only computed "++show nbins++" bins."
+      | i >= nbins = error $ "convolvedModel: x="++show x++" (bin "++show i++") requested but only computed "++show nbins++" bins."
       | otherwise  = convolved VS.! i
       where
         i = round $ x / jiffy
