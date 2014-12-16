@@ -34,21 +34,21 @@ import ModelFit.Model hiding (Curve)
 import ModelFit.Models.Fcs hiding (defaultParams)
 import ModelFit.Models.Lifetime
 
-data Curve = Curve { _cPoints :: VS.Vector (Point Double)
+data Curve = Curve { _cPoints :: VS.Vector (Point Double Double)
                    , _cName   :: String
                    }
 makeLenses ''Curve
 
 data Session param = Session
     { _sCurves :: V.Vector Curve
-    , _sModel  :: Model param Double
+    , _sModel  :: param Double -> Double -> Double
     , _sParams :: param Double
     }
 makeLenses ''Session
 
 modelPlot :: (a ~ Double, Functor curves, Foldable curves)
           => curves Curve
-          -> Model param a
+          -> (param a -> a -> a)
           -> curves (param a)
           -> [a]
           -> Layout a a
@@ -66,21 +66,21 @@ plotCurve c = def & plot_errbars_title  .~ view cName c
         values = map toErrPoint $ VS.toList (c ^. cPoints)
 
 plotModel :: RealFloat a
-          => Model param a
+          => (param a -> a -> a)
           -> param a
           -> [a]
           -> PlotLines a a
 plotModel m p xs =
     def & plot_lines_values .~ [map (\x->(x, m p x)) xs]
 
-toErrPoint :: Num a => Point a -> ErrPoint a a
+toErrPoint :: Num y => Point x y -> ErrPoint x y
 toErrPoint (Point x y e) =
     ErrPoint (ErrValue x x x) (ErrValue (y-e) y (y+e))
 
 data FitConfig = forall param. FitConfig
     { setupLayout   :: Layout Double Double -> Layout Double Double
-    , prepareObs    :: V.Vector (Point Double) -> V.Vector (Point Double)
-    , buildModel    :: VS.Vector (Point Double) -> GlobalFitM Double (param, FitDesc Double)
+    , prepareObs    :: V.Vector (Point Double Double) -> V.Vector (Point Double Double)
+    , buildModel    :: VS.Vector (Point Double Double) -> GlobalFitM Double Double Double (param, FitDesc Double Double Double)
     , showParams    :: Packed VS.Vector Double -> param -> String
     }
 

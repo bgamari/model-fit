@@ -13,7 +13,7 @@ import ModelFit.Model
 import ModelFit.Models.Fcs
 
 sources pts = runGlobalFitM $ do
-    diff1 <- globalParam 2.3 :: GlobalFitM Double (FitExprM Double Double)
+    diff1 <- globalParam 2.3 :: GlobalFitM Double Double Double (FitExprM Double Double)
     diff2 <- globalParam 3.2
     aspect <- globalParam 10
     a <- expr $ Diff3DP <$> diff1 <*> fixed 1 <*> aspect <*> param 1

@@ -38,7 +38,7 @@ instance Distributive Diff3DParams where distribute = genericDistribute
 -- WTF?
 instance Show1 Diff3DParams where showsPrec1 _ f = shows f
 
-diff3DModel :: RealFloat a => Model Diff3DParams a
+diff3DModel :: RealFloat a => Diff3DParams a -> a -> a
 diff3DModel = \(Diff3DP taud alpha a n) tau ->
     let b = 1 + tau_taud
         c = 1 + tau_taud / a^2

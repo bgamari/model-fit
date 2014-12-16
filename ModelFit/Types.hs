@@ -1,3 +1,4 @@
+{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE RankNTypes #-}
@@ -13,41 +14,50 @@ module ModelFit.Types
 import Control.Applicative
 import Control.Monad (mzero)
 import Foreign.Storable
-import Foreign.Ptr (castPtr)
+import Foreign.Ptr (castPtr, plusPtr)
 import qualified Data.Vector as V
 
 import Control.Lens
 import Linear
 import Data.Csv as Csv
 
-data Point a = Point { _ptX, _ptY, _ptVar :: !a}
-             deriving (Show)
+data Point x y = Point { _ptX :: !x
+                       , _ptY, _ptVar :: !y}
+               deriving (Show)
 makeLenses ''Point
 
-instance R1 Point where _x = ptX
-instance R2 Point where _y = ptY
-
-pointV3 :: Iso' (Point a) (V3 a)
+pointV3 :: Iso' (Point a a) (V3 a)
 pointV3 = iso rev fwd
   where
     fwd (V3 x y e) = Point x y e
     rev (Point x y e) = V3 x y e
 
-instance (Storable a) => Storable (Point a) where
-    sizeOf p = sizeOf (p ^. pointV3)
-    alignment p = alignment (p ^. pointV3)
-    peek ptr = (^. re pointV3) <$> peek (castPtr ptr)
-    poke ptr p = poke (castPtr ptr) (p ^. pointV3)
+-- | This doesn't respect the alignment requirements of y
+instance (Storable x, Storable y) => Storable (Point x y) where
+    sizeOf p = sizeOf (undefined :: x) + 2 * sizeOf(undefined :: y)
+    alignment p = alignment (p ^. ptX) -- TODO: This isn't quite right
+    peek ptr =
+        Point <$> peek (castPtr ptr)
+              <*> peek yPtr
+              <*> peekElemOff yPtr 1
+      where
+        yPtr = ptr `plusPtr` sizeOf (undefined :: x)
+    poke ptr (Point x y v) = do
+        poke (castPtr ptr) x
+        poke yPtr y
+        pokeElemOff yPtr 1 v
+      where
+        yPtr = ptr `plusPtr` sizeOf (undefined :: x)
 
-instance Functor Point where
-    fmap f (Point x y var) = Point (f x) (f y) (f var)
+instance Functor (Point x) where
+    fmap f (Point x y var) = Point x (f y) (f var)
 
-instance FromRecord (Point Double) where
+instance FromRecord (Point Double Double) where
     parseRecord v
       | V.length v == 3 = Point <$> v Csv..! 0
                                 <*> v Csv..! 1
                                 <*> v Csv..! 2
       | otherwise       = mzero
 
-withVar :: (a -> a) -> V2 a -> Point a
+withVar :: (a -> a) -> V2 a -> Point a a
 withVar f (V2 x y) = Point x y (f y)

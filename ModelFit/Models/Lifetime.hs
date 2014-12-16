@@ -29,7 +29,6 @@ import qualified Data.Heap as Heap
 import qualified Data.Vector.Storable as VS
 
 import Numeric.FFT.Vector.Invertible
-import ModelFit.Model
 
 data  LifetimeParams a = LifetimeP { _decayTime :: !a
                                    , _amplitude :: !a
@@ -43,7 +42,7 @@ instance Show1 LifetimeParams where
     showsPrec1 _ (LifetimeP decay amp) a =
         "(Lifetime "++show decay++" "++show amp++")"++a
 
-lifetimeModel :: RealFloat a => Model LifetimeParams a
+lifetimeModel :: RealFloat a => LifetimeParams a -> a -> a
 lifetimeModel = \(LifetimeP taud amp) tau -> amp * exp (-tau / taud)
 {-# INLINE lifetimeModel #-}
 

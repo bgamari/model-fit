@@ -21,7 +21,7 @@ import Data.Colour
 import Data.Colour.Names
 
 import ModelFit.Model.Named
-import ModelFit.Types (Point, withVar)
+import ModelFit.Types (Point, ptX, ptY, withVar)
 import ModelFit.Fit
 import ModelFit.FitExpr
 import ModelFit.Models.Lifetime
@@ -76,8 +76,8 @@ main = printing $ do
     irfPts <- V.take 4090 . V.map withPoissonVar <$> readPoints (irfPath args)
     fluorPts <- mapM (\fname->V.take 3200 . V.map withPoissonVar <$> readPoints fname) (fluorPath args)
 
-    let Just irfBg = mode $ V.map (^. _y) $ V.take 1500 irfPts -- HACK
-    let irfHist = V.convert $ V.map (subtract irfBg) $ V.drop offset $ V.map (^._y) irfPts
+    let Just irfBg = mode $ V.map (^. ptY) $ V.take 1500 irfPts -- HACK
+    let irfHist = V.convert $ V.map (subtract irfBg) $ V.drop offset $ V.map (^. ptY) irfPts
         offset = 0
         --period = round $ 1/80e6 / (jiffy * 1e-12)
         period = findPeriod irfHist
@@ -87,13 +87,13 @@ main = printing $ do
     liftIO $ putStrLn $ "IRF background: "++show irfBg
     let irf = mkIrf irfHist irfLength
 
-    let fitFluor :: String                      -- ^ Curve name
-                 -> [FitExprM Double Double]    -- ^ lifetimes
-                 -> V.Vector (Point Double)     -- ^ points
-                 -> GlobalFitM Double (FitDesc Double)
+    let fitFluor :: String                             -- ^ Curve name
+                 -> [FitExprM Double Double]           -- ^ lifetimes
+                 -> V.Vector (Point Double Double)     -- ^ points
+                 -> GlobalFitM Double Double Double (FitDesc Double Double Double)
         fitFluor name taus pts = do
-            let fluorBg = V.head pts ^. _y
-                Just fluorAmp = maximumOf (each . _y) pts
+            let fluorBg = V.head pts ^. ptY
+                Just fluorAmp = maximumOf (each . ptY) pts
                 fitPts = V.convert $ V.take period pts
             let component :: Int -> FitExprM Double Double -> FitExprM Double (Double -> Double)
                 component i tau = lifetimeModel <$> p
@@ -117,24 +117,24 @@ main = printing $ do
     liftIO $ print $ fmap (flip evalParam fit . Param) params
     forM_ (zip3 (fluorPath args) fluorPts fds) $ \(fname,pts,fd) -> do
         let path = fname++".png"
-            ts = V.toList $ V.map (^._x) pts
+            ts = V.toList $ V.map (^. ptX) pts
         liftIO $ void $ renderableToFile def path
                $ toRenderable $ plotFit ts pts (fitEval fd fit)
         liftIO $ putStrLn $ "Reduced Chi squared: "++show (reducedChiSquared fd fit)
 
     return ()
 
-plotFit :: forall a. (Show a, RealFloat a, PlotValue a)
-        => [a] -> V.Vector (Point a) -> (a -> a) -> StackedLayouts a
+plotFit :: forall x y. (Show x, Show y, RealFloat y, Fractional x, PlotValue x, PlotValue y)
+        => [x] -> V.Vector (Point x y) -> (x -> y) -> StackedLayouts x
 plotFit ts pts fit =
     def & slayouts_layouts .~ [StackedLayout layout]
   where
     layout = def & layout_plots .~ plots
                  & layout_y_axis . laxis_generate .~ autoScaledLogAxis def
 
-    plots :: [Plot a a]
+    plots :: [Plot x y]
     plots =
-      [ toPlot $ def & plot_points_values .~ zip [realToFrac $ jiffy*i | i <- [0..]] (toListOf (each . _y) pts)
+      [ toPlot $ def & plot_points_values .~ zip [realToFrac $ jiffy*i | i <- [0..]] (toListOf (each . ptY) pts)
                      & plot_points_style . point_color .~ opaque green
                      & plot_points_title .~ "Observed"
       , toPlot $ def & plot_lines_values .~ [map (\x->(x, fit x)) ts]

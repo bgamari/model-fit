@@ -35,7 +35,6 @@ module ModelFit.Model
     , runGlobalFitM
     , Curve(..)
       -- * Fit models
-    , Model
     , liftOp
       -- * Utilities
     , newParam
@@ -61,12 +60,10 @@ import ModelFit.FitExpr
 import ModelFit.Types
 import ModelFit.Model.Packed
 
-type Model param a = param a -> a -> a
-
 -- | The information necessary to compute a model over a curve
-data Curve a = Curve { curvePoints :: VS.Vector (Point a)
-                     , curveExpr   :: FitExpr (ParamLoc a) a (a -> a)
-                     }
+data Curve p x y = Curve { curvePoints :: VS.Vector (Point x y)
+                         , curveExpr   :: FitExpr (ParamLoc p) p (x -> y)
+                         }
 
 -- | A monad for defining a fit expression, with the ability to introduce
 -- new parameters.
@@ -115,61 +112,61 @@ fixed :: (Monad m, Functor m) => a -> FitExprT p m a
 fixed = pure
 
 -- | Layout the parameters of the given expression
-expr :: Monad m => FitExprT p m a -> GlobalFitT p m (FitExpr (ParamLoc p) p a)
+expr :: Monad m => FitExprT p m a -> GlobalFitT p x y m (FitExpr (ParamLoc p) p a)
 expr (FEM m) = GFM $ lift $ getCompose m
 
 -- | Hoist an expression into a @FitExprT@
 hoist :: (Functor m, Monad m) => FitExpr (ParamLoc p) p a -> FitExprT p m a
 hoist = FEM . Compose . pure
 
-newtype GlobalFitT p m a = GFM (WriterT [Curve p] (StateT [ParamIdx] m) a)
-                         deriving (Functor, Applicative, Monad)
+newtype GlobalFitT p x y m a = GFM (WriterT [Curve p x y] (StateT [ParamIdx] m) a)
+                             deriving (Functor, Applicative, Monad)
 
-type GlobalFitM p = GlobalFitT p Identity
+type GlobalFitM p x y = GlobalFitT p x y Identity
 
-instance MonadTrans (GlobalFitT p) where
+instance MonadTrans (GlobalFitT p x y) where
     lift = GFM . lift . lift
 
 -- | Create a global parameter
-newGlobalParam :: Monad m => p -> GlobalFitT p m (ParamLoc p)
+newGlobalParam :: Monad m => p -> GlobalFitT p x y m (ParamLoc p)
 newGlobalParam initial = GFM $ do
     idx <- lift popHead
     return $ ParamLoc idx initial
 
-globalParam :: (Functor m, Monad m) => s -> GlobalFitT s m (FitExprT s m s)
+globalParam :: (Functor m, Monad m) => s -> GlobalFitT s x y m (FitExprT s m s)
 globalParam initial = liftExpr . Param <$> newGlobalParam initial
 
-data FitDesc a = FitDesc { fitModel  :: FitExpr (ParamLoc a) a (a -> a)
-                         , fitPoints :: VS.Vector (Point a)
-                         }
+data FitDesc p x y = FitDesc { fitModel  :: FitExpr (ParamLoc p) p (x -> y)
+                             , fitPoints :: VS.Vector (Point x y)
+                             }
 
-fitEval :: VS.Storable a => FitDesc a -> Packed VS.Vector a -> a -> a
+fitEval :: VS.Storable p => FitDesc p x y -> Packed VS.Vector p -> x -> y
 fitEval fd params = evalFitExpr (\(ParamLoc p _) -> params ^. packed p) (fitModel fd)
 
 -- | Add a curve to the fit, returning a function unpacking the
 -- model parameters
-fit :: (VS.Storable a, Monad m)
-    => VS.Vector (Point a)       -- ^ Observed points
-    -> FitExprT a m (a -> a)     -- ^ The model
-    -> GlobalFitT a m (FitDesc a)
+fit :: (VS.Storable p, Monad m)
+    => VS.Vector (Point x y)       -- ^ Observed points
+    -> FitExprT p m (x -> y)       -- ^ The model
+    -> GlobalFitT p x y m (FitDesc p x y)
 fit points (FEM m) = do
     m' <- GFM $ lift $ getCompose m
     GFM $ tell [Curve points m']
     return $ FitDesc { fitModel = m', fitPoints = points }
 
 -- | Run a model definition
-runGlobalFitT :: (VS.Storable s, Num s, Monad m)
-              => GlobalFitT s m a
-              -> m (a, [Curve s], Packed VS.Vector s)
+runGlobalFitT :: (VS.Storable p, Num p, Monad m)
+              => GlobalFitT p x y m a
+              -> m (a, [Curve p x y], Packed VS.Vector p)
 runGlobalFitT (GFM action) = do
     res <- evalStateT (runWriterT action) (map ParamIdx [0..])
     case res of
       (r, curves) -> let p0 = packParams $ traverse curveExpr curves
                      in return (r, curves, Packed p0)
 
-runGlobalFitM :: (VS.Storable s, Num s)
-              => GlobalFitM s a
-              -> (a, [Curve s], Packed VS.Vector s)
+runGlobalFitM :: (VS.Storable p, Num p)
+              => GlobalFitM p x y a
+              -> (a, [Curve p x y], Packed VS.Vector p)
 runGlobalFitM = runIdentity . runGlobalFitT
 
 liftOp :: (a -> a -> a) -> (b -> a) -> (b -> a) -> (b -> a)
