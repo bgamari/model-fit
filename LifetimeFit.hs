@@ -1,3 +1,5 @@
+{-# LANGUAGE ScopedTypeVariables #-}
+
 import Prelude hiding (sequence, mapM, foldl)
 import Data.Traversable
 import Data.Foldable
@@ -113,27 +115,28 @@ main = printing $ do
     liftIO $ print $ fmap (flip evalParam p0) params
     liftIO $ print $ fmap (flip evalParam fit) params
     forM_ (zip3 (fluorPath args) fluorPts fds) $ \(fname,pts,fd) -> do
-        liftIO $ plot (fname++".png")
-            [ let f = fitEval fd fit
-                  ts = take 3000 $ V.toList $ V.map (^._x) irfPts
-              in toPlot $ def & plot_lines_values .~ [map (\t->(t, f t)) ts]
-                              & plot_lines_style . line_color .~ opaque red
-                              & plot_lines_title .~ "Fit"
-            , toPlot $ def & plot_points_values .~ zip [jiffy*i | i <- [0..]] (toListOf (each . _y) pts)
-                           & plot_points_style . point_color .~ opaque green
-                           & plot_points_title .~ "Observed"
-            ]
+        let path = fname++".png"
+            ts = take 3000 $ V.toList $ V.map (^._x) irfPts
+        liftIO $ void $ renderableToFile def path
+               $ toRenderable $ plotFit ts pts (fitEval fd fit)
         liftIO $ putStrLn $ "Reduced Chi squared: "++show (reducedChiSquared fd fit)
 
     return ()
 
-plot :: FilePath -> [Plot Double Double] -> IO ()
-plot path plots =
-    void $ renderableToFile def path
-         $ toRenderable
-         $ layout_plots .~ plots
-         $ layout_y_axis . laxis_generate .~ autoScaledLogAxis def
-         $ def
+plotFit :: forall a. (Show a, RealFloat a, PlotValue a)
+        => [a] -> V.Vector (Point a) -> (a -> a) -> StackedLayouts a
+plotFit ts pts fit =
+    def & slayouts_layouts .~ [StackedLayout layout]
+  where
+    layout = def & layout_plots .~ plots
+                 & layout_y_axis . laxis_generate .~ autoScaledLogAxis def
 
-colors :: [AlphaColour Double]
-colors = map opaque [red, green, blue, yellow, orange, purple]
+    plots :: [Plot a a]
+    plots =
+      [ toPlot $ def & plot_points_values .~ zip [realToFrac $ jiffy*i | i <- [0..]] (toListOf (each . _y) pts)
+                     & plot_points_style . point_color .~ opaque green
+                     & plot_points_title .~ "Observed"
+      , toPlot $ def & plot_lines_values .~ [map (\x->(x, fit x)) ts]
+                     & plot_lines_style . line_color .~ opaque red
+                     & plot_lines_title .~ "Fit"
+      ]
