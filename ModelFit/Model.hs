@@ -38,6 +38,8 @@ module ModelFit.Model
     , Model
     , liftOp
       -- * Utilities
+    , newParam
+    , newGlobalParam
     , paramExpr
     , liftExpr
     ) where
@@ -96,14 +98,17 @@ popHead = do
 liftExpr :: Monad m => FitExpr (ParamLoc p) p a -> FitExprT p m a
 liftExpr = FEM . Compose . return
 
-paramExpr :: Monad m => p -> FitExprT p m (FitExpr (ParamLoc p) p p)
-paramExpr initial = FEM $ Compose $ do
+newParam :: Monad m => p -> FitExprT p m (ParamLoc p)
+newParam initial = FEM $ Compose $ do
     idx <- popHead
-    return $ return $ Param $ ParamLoc idx initial
+    return $ return $ ParamLoc idx initial
+
+paramExpr :: (Functor m, Monad m) => p -> FitExprT p m (FitExpr (ParamLoc p) p p)
+paramExpr initial = Param <$> newParam initial
 
 -- | Introduce a new parameter to be optimized over (given an initial value)
 param :: (Monad m, Functor m) => a -> FitExprT a m a
-param initial = paramExpr initial  >>= liftExpr
+param initial = paramExpr initial >>= liftExpr
 
 -- | Lift a pure value into a fit expression
 fixed :: (Monad m, Functor m) => a -> FitExprT p m a
@@ -126,10 +131,13 @@ instance MonadTrans (GlobalFitT p) where
     lift = GFM . lift . lift
 
 -- | Create a global parameter
-globalParam :: Monad m => s -> GlobalFitT s m (FitExprT s m s)
-globalParam initial = GFM $ do
+newGlobalParam :: Monad m => p -> GlobalFitT p m (ParamLoc p)
+newGlobalParam initial = GFM $ do
     idx <- lift popHead
-    return $ FEM $ Compose $ return $ Param $ ParamLoc idx initial
+    return $ ParamLoc idx initial
+
+globalParam :: (Functor m, Monad m) => s -> GlobalFitT s m (FitExprT s m s)
+globalParam initial = liftExpr . Param <$> newGlobalParam initial
 
 data FitDesc a = FitDesc { fitModel  :: FitExpr (ParamLoc a) a (a -> a)
                          , fitPoints :: VS.Vector (Point a)

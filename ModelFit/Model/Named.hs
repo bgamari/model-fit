@@ -27,25 +27,27 @@ import Control.Monad.Trans.Class (lift)
 import qualified Data.Vector.Storable as VS
 import qualified Data.Map as M
 
-import ModelFit.Model ( Packed, packed, FitDesc, Curve, fit, ParamLoc, FitExpr
+import ModelFit.Model ( Packed, packed, FitDesc, Curve, fit, ParamLoc
                       , expr, hoist, liftOp, fitEval, evalParam)
 import qualified ModelFit.Model as Mo
+import ModelFit.FitExpr
 
-type Params p = M.Map String (Mo.FitExpr (Mo.ParamLoc p) p p)
+type Params p = M.Map String (Mo.ParamLoc p)
 type FitExprM p = Mo.FitExprT p (Writer (Params p))
 type GlobalFitM p = Mo.GlobalFitT p (Writer (Params p)) 
 
 globalParam :: String -> a -> GlobalFitM a (FitExprM a a)
 globalParam name initial = do
-    p <- Mo.globalParam initial >>= Mo.expr
-    lift $ tell $ M.singleton name p
-    return $ Mo.liftExpr p
+    paramLoc <- Mo.newGlobalParam initial
+    param <- Mo.expr $ Mo.liftExpr $ Param paramLoc
+    lift $ tell $ M.singleton name paramLoc
+    return $ Mo.liftExpr param
 
 param :: String -> a -> FitExprM a a
 param name initial = do
-    p <- Mo.paramExpr initial
-    lift $ tell $ M.singleton name p
-    Mo.liftExpr p
+    paramLoc <- Mo.newParam initial
+    lift $ tell $ M.singleton name paramLoc
+    Mo.liftExpr $ Param paramLoc
 
 runGlobalFitM :: (Num p, VS.Storable p)
               => GlobalFitM p a

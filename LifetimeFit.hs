@@ -23,6 +23,7 @@ import Data.Colour.Names
 import ModelFit.Model.Named
 import ModelFit.Types (Point, withVar)
 import ModelFit.Fit
+import ModelFit.FitExpr
 import ModelFit.Models.Lifetime
 
 import CsvUtils
@@ -112,8 +113,8 @@ main = printing $ do
 
     let Right fit = leastSquares curves p0
 
-    liftIO $ print $ fmap (flip evalParam p0) params
-    liftIO $ print $ fmap (flip evalParam fit) params
+    liftIO $ print $ fmap (flip evalParam p0 . Param) params
+    liftIO $ print $ fmap (flip evalParam fit . Param) params
     forM_ (zip3 (fluorPath args) fluorPts fds) $ \(fname,pts,fd) -> do
         let path = fname++".png"
             ts = take 3000 $ V.toList $ V.map (^._x) irfPts
